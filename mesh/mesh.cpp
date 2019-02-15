@@ -7932,7 +7932,7 @@ void Mesh::PrintXG(std::ostream &out) const
    out << flush;
 }
 
-void Mesh::Print(mfem::adios2stream &out) const
+void Mesh::Print(adios2stream &out) const
 {
    //TODO print sequential mesh
 }

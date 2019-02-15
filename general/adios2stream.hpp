@@ -13,8 +13,8 @@
 // Author: William F Godoy godoywf@ornl.gov
 // adios2: Adaptable Input/Output System https://github.com/ornladios/ADIOS2
 
-#ifndef MFEM_ADIOS2STREAM_HPP
-#define MFME_ADIOS2STREAM_HPP
+#ifndef MFEM_ADIOS2STREAM
+#define MFEM_ADIOS2STREAM
 
 #include <adios2.h>
 
@@ -173,4 +173,4 @@ private:
 
 } //end namespace mfem
 
-#endif /* MFEM_ADIOS2STREAM_HPP */
+#endif /* MFEM_ADIOS2STREAM */

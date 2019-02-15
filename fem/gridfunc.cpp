@@ -2649,7 +2649,7 @@ void GridFunction::Save(std::ostream &out) const
    out.flush();
 }
 
-void GridFunction::Save(mfem::adios2stream &out) const
+void GridFunction::Save(adios2stream &out) const
 {
 
 }

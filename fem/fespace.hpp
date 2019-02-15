@@ -619,7 +619,7 @@ public:
     * Save Finite Element Space using adios2 bp format
     * @param out input adios stream
     */
-   void Save(mfem::adios2stream &out) const;
+   void Save(adios2stream &out) const;
 
    /** @brief Read a FiniteElementSpace from a stream. The returned
        FiniteElementCollection is owned by the caller. */
