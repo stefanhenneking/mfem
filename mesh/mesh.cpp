@@ -7934,7 +7934,30 @@ void Mesh::PrintXG(std::ostream &out) const
 
 void Mesh::Print(adios2stream &out) const
 {
-   //TODO print sequential mesh
+    out.io.DefineAttribute("app", "MFEM");
+    out.io.DefineAttribute("mesh_version", "1.0");
+    out.io.DefineAttribute("glvis_types_to_vtk", out.glvis2vtk );
+    out.io.DefineAttribute("glvis_types", out.glvis_types.data(), out.glvis_types.size() );
+
+    //out.io.DefineVariable<uint32_t>("elements");
+
+
+
+	if(!out.engine) //hasn't been opened
+	{
+		out.engine = out.io.Open(out.name, out.adios2openmode);
+	}
+
+	out.engine.BeginStep();
+
+	    for( int e = 0; e < NumOfElements; ++e )
+	    {
+	    	elements[0]->GetGeometryType();
+	    }
+
+
+
+
 }
 
 void Mesh::Printer(std::ostream &out, std::string section_delimiter) const

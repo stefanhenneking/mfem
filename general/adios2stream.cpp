@@ -70,9 +70,6 @@ adios2stream::adios2stream(const std::string &name, const openmode mode,
 }
 #endif
 
-adios2stream::~adios2stream()
-{
-}
 
 void adios2stream::SetParameters(const adios2::Params& parameters)
 {

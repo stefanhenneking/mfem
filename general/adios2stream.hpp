@@ -20,6 +20,7 @@
 
 #include <string>
 #include <memory>
+#include <vector>
 
 #ifdef MFEM_USE_MPI
 #include <mpi.h>
@@ -127,7 +128,7 @@ public:
 #endif
 
    /** using RAII components, nothing to be deallocated **/
-   virtual ~adios2stream();
+   virtual ~adios2stream() = default;
 
    /**
     * Set parameters for a particular adios2stream Engine
@@ -161,12 +162,17 @@ private:
    /** heavy object doing system-level I/O operations */
    adios2::Engine engine;
 
+   constexpr std::vector<uint32_t> glvis2vtk{1, 3, 5, 8, 10, 11, 13};
+   constexpr std::vector<std::string> glvis_types{"POINTS", "SEGMENT", "TRIANGLE", "SQUARE", "TETRAHEDRON", "CUBE", "PRISM"}
+
    /**
     * convert openmode input to adios2::Mode format for adios2openmode placeholder
     * @param mode input
     * @return adios2::Mode format
     */
    adios2::Mode ToADIOS2Mode(const openmode mode);
+
+
 
 };
 
