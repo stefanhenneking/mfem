@@ -154,6 +154,7 @@ public:
    {
       if (Get().backends & ~Backend::CPU)
       {
+         printf("Computing on device \n");
          Get().mode = Device::ACCELERATED;
          Get().allowed_backends = Get().backends;
       }
@@ -164,6 +165,7 @@ public:
        transferring data automatically from the device, if necessary. */
    static inline void Disable()
    {
+      printf("Computing on host \n");
       Get().mode = Device::SEQUENTIAL;
       Get().allowed_backends = Backend::CPU;
    }
