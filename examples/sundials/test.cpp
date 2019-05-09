@@ -1,0 +1,280 @@
+//                                MFEM Example 9
+//                             SUNDIALS Modification
+//
+// Compile with: make ex9
+//
+// Sample runs:
+//    ex9 -m ../../data/periodic-segment.mesh -p 0 -r 2 -s 11 -dt 0.005
+//    ex9 -m ../../data/periodic-square.mesh  -p 1 -r 2 -s 12 -dt 0.005 -tf 9
+//    ex9 -m ../../data/periodic-hexagon.mesh -p 0 -r 2 -s 11 -dt 0.0018 -vs 25
+//    ex9 -m ../../data/periodic-hexagon.mesh -p 0 -r 2 -s 13 -dt 0.01 -vs 15
+//    ex9 -m ../../data/amr-quad.mesh         -p 1 -r 2 -s 13 -dt 0.002 -tf 9
+//    ex9 -m ../../data/star-q3.mesh          -p 1 -r 2 -s 13 -dt 0.005 -tf 9
+//    ex9 -m ../../data/disc-nurbs.mesh       -p 1 -r 3 -s 11 -dt 0.005 -tf 9
+//    ex9 -m ../../data/periodic-cube.mesh    -p 0 -r 2 -s 12 -dt 0.02 -tf 8 -o 2
+//
+// Description:  This example code solves the time-dependent advection equation
+//               du/dt + v.grad(u) = 0, where v is a given fluid velocity, and
+//               u0(x)=u(0,x) is a given initial condition.
+//
+//               The example demonstrates the use of Discontinuous Galerkin (DG)
+//               bilinear forms in MFEM (face integrators), the use of explicit
+//               ODE time integrators, the definition of periodic boundary
+//               conditions through periodic meshes, as well as the use of GLVis
+//               for persistent visualization of a time-evolving solution. The
+//               saving of time-dependent data files for external visualization
+//               with VisIt (visit.llnl.gov) is also illustrated.
+
+#include "mfem.hpp"
+#include <fstream>
+#include <iostream>
+#include <algorithm>
+
+#ifndef MFEM_USE_SUNDIALS
+#error This example requires that MFEM is built with MFEM_USE_SUNDIALS=YES
+#endif
+
+using namespace std;
+using namespace mfem;
+
+// Choice for the problem setup. The fluid velocity, initial condition and
+// inflow boundary condition are chosen based on this parameter.
+int problem;
+
+// Mesh bounding box
+Vector bb_min, bb_max;
+
+
+/** Reimplement Roberts problem here */
+class RobertsSUNDIALS : public TimeDependentAdjointOperator
+{
+public:
+  RobertsSUNDIALS(int dim, Vector p) :
+    TimeDependentAdjointOperator(dim),
+    p_(p) {}
+
+  virtual void Mult(const Vector &x, Vector &y) const;
+  virtual void QuadratureIntegration(const Vector &x, Vector &y) const;
+  virtual void AdjointRateMult(const Vector &x, Vector &y) const;
+  virtual void ObjectiveSensitivityMult(const Vector &x, Vector &y) const;
+
+  
+protected:
+  Vector p_;
+};
+
+
+int main(int argc, char *argv[])
+{
+   // 1. Parse command-line options.
+   problem = 0;
+   const char *mesh_file = "../../data/periodic-hexagon.mesh";
+   int ref_levels = 2;
+   int order = 3;
+   int ode_solver_type = 1;
+   double t_final = 0.4;
+   double dt = 0.01;
+   bool visualization = true;
+   bool visit = false;
+   bool binary = false;
+   int vis_steps = 5;
+
+   // Relative and absolute tolerances for CVODE and ARKODE.
+   const double reltol = 1e-4, abstol = 1e-6;
+
+   int precision = 8;
+   cout.precision(precision);
+
+   OptionsParser args(argc, argv);
+   args.AddOption(&mesh_file, "-m", "--mesh",
+                  "Mesh file to use.");
+   args.AddOption(&problem, "-p", "--problem",
+                  "Problem setup to use. See options in velocity_function().");
+   args.AddOption(&ref_levels, "-r", "--refine",
+                  "Number of times to refine the mesh uniformly.");
+   args.AddOption(&order, "-o", "--order",
+                  "Order (degree) of the finite elements.");
+   args.AddOption(&ode_solver_type, "-s", "--ode-solver",
+                  "ODE solver: 1 - CVODE (adaptive order) implicit Adams,\n\t"
+                  "            2 - ARKODE default (4th order) explicit,\n\t"
+                  "            3 - ARKODE RK8.");
+   args.AddOption(&t_final, "-tf", "--t-final",
+                  "Final time; start time is 0.");
+   args.AddOption(&dt, "-dt", "--time-step",
+                  "Time step.");
+   args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
+                  "--no-visualization",
+                  "Enable or disable GLVis visualization.");
+   args.AddOption(&visit, "-visit", "--visit-datafiles", "-no-visit",
+                  "--no-visit-datafiles",
+                  "Save data files for VisIt (visit.llnl.gov) visualization.");
+   args.AddOption(&binary, "-binary", "--binary-datafiles", "-ascii",
+                  "--ascii-datafiles",
+                  "Use binary (Sidre) or ascii format for VisIt data files.");
+   args.AddOption(&vis_steps, "-vs", "--visualization-steps",
+                  "Visualize every n-th timestep.");
+   
+   args.Parse();
+   if (!args.Good())
+   {
+      args.PrintUsage(cout);
+      return 1;
+   }
+   // check for vaild ODE solver option
+   if (ode_solver_type < 1 || ode_solver_type > 4)
+   {
+      cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+      return 3;
+   }
+   args.PrintOptions(cout);
+
+   // 2. Read the mesh from the given mesh file. We can handle geometrically
+   //    periodic meshes in this code.
+   Mesh *mesh = new Mesh(1,1,1,Element::HEXAHEDRON);
+   int dim = mesh->Dimension();
+
+   // 3. Refine the mesh to increase the resolution. In this example we do
+   //    'ref_levels' of uniform refinement, where 'ref_levels' is a
+   //    command-line parameter. If the mesh is of NURBS type, we convert it to
+   //    a (piecewise-polynomial) high-order mesh.
+   for (int lev = 0; lev < ref_levels; lev++)
+   {
+      mesh->UniformRefinement();
+   }
+   if (mesh->NURBSext)
+   {
+      mesh->SetCurvature(max(order, 1));
+   }
+   mesh->GetBoundingBox(bb_min, bb_max, max(order, 1));
+
+   // 7. Define the time-dependent evolution operator describing the ODE
+   //    right-hand side, and define the ODE solver used for time integration.
+   /*
+     data->p[0] = RCONST(0.04);
+     data->p[1] = RCONST(1.0e4);
+     data->p[2] = RCONST(3.0e7);
+    */
+   
+   Vector p(3);
+   p[0] = 0.04;
+   p[1] = 1.0e4;
+   p[2] = 3.0e7;
+   // 3 is the size of the solution vector
+   RobertsSUNDIALS adv(3, p);
+
+   double t = 0.0;
+   adv.SetTime(t);
+
+   // Create the time integrator
+   ODESolver *ode_solver = NULL;
+   CVODESolver *cvode = NULL;
+   CVODESSolver *cvodes = NULL;
+   ARKStepSolver *arkode = NULL;
+
+   Vector u(3);
+   u = 0.;
+   u[0] = 1.;
+   
+   Vector abstol_v(3);
+   abstol_v[0] = 1.0e-8;
+   abstol_v[1] = 1.0e-14;
+   abstol_v[2] = 1.0e-6;
+
+   
+   switch (ode_solver_type)
+     {
+     case 1:
+	 cvode = new CVODESolver(CV_BDF);
+	 cvode->Init(adv, t, u);
+	 cvode->SetSVtolerances(reltol, abstol_v);
+	 //         cvode->SetSStolerances(reltol, abstol);
+	 cvode->SetMaxStep(dt);
+	 ode_solver = cvode;
+       break;
+     case 2:
+     case 3:
+       arkode = new ARKStepSolver(ARKStepSolver::EXPLICIT);
+       arkode->Init(adv, t, u);
+       arkode->SetSStolerances(reltol, abstol);
+       arkode->SetMaxStep(dt);
+       if (ode_solver_type == 13) arkode->SetERKTableNum(FEHLBERG_13_7_8);
+       ode_solver = arkode; break;
+     case 4:
+       cvodes = new CVODESSolver(CV_BDF);
+       cvodes->Init(adv, t, u);
+       cvodes->SetWFTolerances([reltol, abstol_v]
+			       (Vector y, Vector w, CVODESSolver * self)
+			       {
+				 for (int i = 0; i < y.Size(); i++) {
+				   double ww = reltol * abs(y[i]) + abstol_v[i];
+				   if (ww <= 0.) return -1;
+				   w[i] = 1./ww;
+				 }
+				 return 0;
+			       }
+			       );
+       cvodes->SetSVtolerances(reltol, abstol_v);
+       cvodes->SetMaxStep(dt);
+       cvodes->InitQuadIntegration(1.e-6,1.e-6);
+       cvodes->InitAdjointSolve(150);
+       ode_solver = cvodes; break;
+     }
+
+   // 8. Perform time-integration (looping over the time iterations, ti,
+   //    with a time-step dt).
+   bool done = false;
+   for (int ti = 0; !done; )
+   {
+      double dt_real = min(dt, t_final - t);
+      ode_solver->Step(u, t, dt_real);
+      ti++;
+
+      done = (t >= t_final - 1e-8*dt);
+
+      if (done || ti % vis_steps == 0)
+      {
+         cout << "time step: " << ti << ", time: " << t << endl;
+         if (cvode) { cvode->PrintInfo(); }
+         if (arkode) { arkode->PrintInfo(); }
+	 if (cvodes) { cvodes->PrintInfo(); }
+
+      }
+   }
+
+   cout << "Final Solution: " << t << endl;
+   u.Print();
+
+   if (cvodes) {
+     cout << " Final Quadrature " << endl;
+     cout << cvodes->EvalQuadIntegration(t) << endl;
+   }
+
+   // 10. Free the used memory.
+   delete ode_solver;
+   
+   return 0;
+}
+
+// Roberts Implementation
+void RobertsSUNDIALS::Mult(const Vector &x, Vector &y) const
+{
+  y[0] = -p_[0]*x[0] + p_[1]*x[1]*x[2];
+  y[2] = p_[2]*x[1]*x[1];
+  y[1] = -y[0] - y[2];
+}
+
+
+void RobertsSUNDIALS::QuadratureIntegration(const Vector &y, Vector &qdot) const
+{
+  qdot[0] = y[2];
+}
+
+
+void RobertsSUNDIALS::AdjointRateMult(const Vector &x, Vector &y) const
+{
+}
+
+void RobertsSUNDIALS::ObjectiveSensitivityMult(const Vector &x, Vector &y) const
+{
+}
+

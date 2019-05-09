@@ -35,9 +35,11 @@
 #include "ode.hpp"
 #include "solvers.hpp"
 
-#include <cvode/cvode.h>
+#include <cvodes/cvodes.h>
 #include <arkode/arkode_arkstep.h>
 #include <kinsol/kinsol.h>
+
+#include <functional>
 
 namespace mfem
 {
@@ -149,10 +151,16 @@ namespace mfem
   {
   protected:
     int step_mode; /// CVODE step mode (CV_NORMAL or CV_ONE_STEP).
-
+    int root_components; /// Number of components in gout
+    
     /// Wrapper to compute the ODE Rhs function.
     static int RHS(realtype t, const N_Vector y, N_Vector ydot, void *user_data);
 
+    static int root(realtype t, N_Vector y, realtype *gout, void *user_data);
+    
+    typedef std::function<int(realtype t, Vector y, Vector gout, CVODESolver *)> RootFunction;
+    RootFunction root_func;
+    
   public:
     /** Construct a serial wrapper to SUNDIALS' CVODE integrator.
         @param[in] lmm Specifies the linear multistep method, the options are:
@@ -204,6 +212,12 @@ namespace mfem
     /** Set the scalar relative and scalar absolute tolerances. */
     void SetSStolerances(double reltol, double abstol);
 
+    /** Set the scalar relative and vector of absolute tolerances. */
+    void SetSVtolerances(double reltol, Vector abstol);
+
+    /** Initialize root Finder */
+    void SetRootFinder(int components, RootFunction func);
+    
     /** Set the maximum time step. */
     void SetMaxStep(double dt_max);
 
@@ -223,7 +237,106 @@ namespace mfem
     /// Destroy the associated CVODE memory and SUNDIALS objects.
     virtual ~CVODESolver();
   };
+  
+  class TimeDependentAdjointOperator : public TimeDependentOperator
+  {
+  public:
+    TimeDependentAdjointOperator(int dim, double t = 0., Type type = EXPLICIT) :
+      TimeDependentOperator(dim, t, type) {}
 
+    virtual ~TimeDependentAdjointOperator(){};
+
+    virtual void QuadratureIntegration(const Vector &x, Vector &y) const = 0;
+    virtual void AdjointRateMult(const Vector &x, Vector &y) const = 0;
+    virtual void ObjectiveSensitivityMult(const Vector &x, Vector &y) const = 0;
+
+  protected:
+    
+  };
+  
+  // ---------------------------------------------------------------------------
+  // Interface to the CVODES library -- linear multi-step methods
+  // ---------------------------------------------------------------------------
+
+  class CVODESSolver : public CVODESolver
+  {
+  protected:
+    int ncheck; // number of checkpoints used so far
+    
+    /// Wrapper to compute the ODE Rhs function.
+    static int fQ(realtype t, const N_Vector y, N_Vector qdot, void *user_data);
+
+    static int fB(realtype t, N_Vector y, 
+		  N_Vector yB, N_Vector yBdot, void *user_dataB) { return 0; };
+
+    static int fQB(realtype t, N_Vector y, N_Vector yB, 
+		   N_Vector qBdot, void *user_dataB) {return 0;};
+
+    static int ewt(N_Vector y, N_Vector w, void *user_data);
+
+    typedef std::function<int(Vector y, Vector w, CVODESSolver*)> EWTFunction;
+    EWTFunction ewt_func;
+
+    N_Vector           q;   /// Quadrature vector.
+    
+  public:
+    /** Construct a serial wrapper to SUNDIALS' CVODE integrator.
+        @param[in] lmm Specifies the linear multistep method, the options are:
+                       CV_ADAMS - implicit methods for non-stiff systems
+                       CV_BDF   - implicit methods for stiff systems */
+    CVODESSolver(int lmm);
+
+#ifdef MFEM_USE_MPI
+    /** Construct a parallel wrapper to SUNDIALS' CVODE integrator.
+        @param[in] comm The MPI communicator used to partition the ODE system
+        @param[in] lmm  Specifies the linear multistep method, the options are:
+                        CV_ADAMS - implicit methods for non-stiff systems
+                        CV_BDF   - implicit methods for stiff systems */
+    CVODESSolver(MPI_Comm comm, int lmm) : CVODESolver( comm, lmm) {}
+#endif
+
+    /** Initialize CVODE: Calls CVodeInit() and sets some defaults.
+        @param[in] f_ the TimeDependentOperator that defines the ODE system
+        @param[in] t  the initial time
+        @param[in] x  the initial condition
+
+        @note All other methods must be called after Init(). */
+    void Init(TimeDependentAdjointOperator &f_, double &t, Vector &x);
+
+    /** Integrate the ODE with CVODE using the specified step mode.
+
+        @param[out]    x  Solution vector at the requested output timem x=x(t).
+        @param[in/out] t  On output, the output time reached.
+        @param[in/out] dt On output, the last time step taken.
+
+        @note On input, the values of t and dt are used to compute desired
+        output time for the integration, tout = t + dt.
+    */
+    virtual void Step(Vector &x, double &t, double &dt);
+
+    // Adjoint stuff
+    virtual void StepB(Vector &w, double &t, double &dt) {}
+
+    /// Set multiplicative error weights
+    void SetWFTolerances(EWTFunction func);
+
+    // Initialize Quadrature Integration
+    void InitQuadIntegration(double reltolQ = 1.e-3, double abstolQ = 1e-8);
+
+    // Initialize Adjoint
+    void InitAdjointSolve(int steps);
+
+    // Get Number of Steps for ForwardSolve
+    long GetNumSteps();
+
+    // Evalute Quadrature
+    double EvalQuadIntegration(double t);
+    
+    /// Destroy the associated CVODE memory and SUNDIALS objects.
+    virtual ~CVODESSolver() {};
+  };
+
+  
   // ---------------------------------------------------------------------------
   // Interface to ARKode's ARKStep module -- Additive Runge-Kutta methods
   // ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@
 #include <nvector/nvector_parallel.h>
 #endif
 
-#include <cvode/cvode.h>
+#include <cvodes/cvodes.h>
 #include <sunlinsol/sunlinsol_spgmr.h>
 
 #define GET_CONTENT(X) ( X->content )
@@ -144,7 +144,7 @@ namespace mfem
   // ---------------------------------------------------------------------------
   // CVODE interface
   // ---------------------------------------------------------------------------
-
+  
   int CVODESolver::RHS(realtype t, const N_Vector y, N_Vector ydot,
                        void *user_data)
   {
@@ -161,7 +161,28 @@ namespace mfem
     return(0);
   }
 
-  CVODESolver::CVODESolver(int lmm)
+  int CVODESolver::root(realtype t, N_Vector y, realtype *gout, void *user_data)
+  {
+    CVODESolver *self = static_cast<CVODESolver*>(user_data);
+
+    if (!self->root_func) return CV_RTFUNC_FAIL;    
+
+    Vector mfem_y(y);
+    Vector mfem_gout(gout, self->root_components);
+        
+    return self->root_func(t, mfem_y, mfem_gout, self);
+  }
+
+  void CVODESolver::SetRootFinder(int components, RootFunction func) {
+    root_func = func;
+
+    flag = CVodeRootInit(sundials_mem, components, root);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in SetRootFinder()");
+  }
+
+  
+  CVODESolver::CVODESolver(int lmm) :
+    root_func(NULL)
   {
     // Create the solver memory
     sundials_mem = CVodeCreate(lmm);
@@ -179,7 +200,8 @@ namespace mfem
   }
 
 #ifdef MFEM_USE_MPI
-  CVODESolver::CVODESolver(MPI_Comm comm, int lmm)
+  CVODESolver::CVODESolver(MPI_Comm comm, int lmm):
+    root_func(NULL)
   {
     // Create the solver memory
     sundials_mem = CVodeCreate(lmm);
@@ -327,6 +349,17 @@ namespace mfem
     MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSStolerances()");
   }
 
+  void CVODESolver::SetSVtolerances(double reltol, Vector abstol)
+  {
+    MFEM_VERIFY(abstol.Size() == f->Height(), "abstolerance is not the same size.");
+   
+    N_Vector nv_abstol = N_VNewEmpty_Serial(0);    
+    abstol.ToNVector(nv_abstol);
+    
+    flag = CVodeSVtolerances(sundials_mem, reltol, nv_abstol);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSVtolerances()");
+  }
+  
   void CVODESolver::SetMaxStep(double dt_max)
   {
     flag = CVodeSetMaxStep(sundials_mem, dt_max);
@@ -394,6 +427,110 @@ namespace mfem
     CVodeFree(&sundials_mem);
   }
 
+
+  // ---------------------------------------------------------------------------
+  // CVODES interface
+  // ---------------------------------------------------------------------------
+
+  CVODESSolver::CVODESSolver(int lmm) :
+    CVODESolver(lmm),
+    ncheck(0)
+  {
+
+  }
+  
+  void CVODESSolver::InitAdjointSolve(int steps)
+  {
+    flag = CVodeAdjInit(sundials_mem, steps, CV_HERMITE);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeAdjInit");
+  }
+  
+  // For now just do some kind of default
+  void CVODESSolver::InitQuadIntegration(double reltolQ, double abstolQ)
+  {
+    q = N_VNew_Serial(1);    
+
+    flag = CVodeQuadInit(sundials_mem, fQ, q);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeQuadInit()");
+
+    flag = CVodeSetQuadErrCon(sundials_mem, SUNTRUE);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeSetQuadErrCon");
+
+    flag = CVodeQuadSStolerances(sundials_mem, reltolQ, abstolQ);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeQuadSStolerances");
+    
+  }
+  
+  void CVODESSolver::Init(TimeDependentAdjointOperator &f_, double &t, Vector &x)
+  {
+    CVODESolver::Init(f_, t, x);
+  }
+
+
+  int CVODESSolver::fQ(realtype t, const N_Vector y, N_Vector qdot, void *user_data)
+  {
+    CVODESSolver *self = static_cast<CVODESSolver*>(user_data);
+    Vector mfem_y(y);
+    Vector mfem_qdot(qdot);
+    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);    
+  }
+  
+  int CVODESSolver::ewt(N_Vector y, N_Vector w, void *user_data)
+  {
+    CVODESSolver *self = static_cast<CVODESSolver*>(user_data);
+
+    Vector mfem_y(y);
+    Vector mfem_w(w);
+    
+    return self->ewt_func(mfem_y, mfem_w, self);
+  }
+  
+  void CVODESSolver::SetWFTolerances(EWTFunction func)
+  {
+    ewt_func = func;
+    CVodeWFtolerances(sundials_mem, ewt);
+  }
+
+  void CVODESSolver::Step(Vector &x, double &t, double &dt)
+  {
+    if (!Parallel()) {
+      NV_DATA_S(y) = x.GetData();
+      MFEM_VERIFY(NV_LENGTH_S(y) == x.Size(), "");
+    } else {
+#ifdef MFEM_USE_MPI
+      NV_DATA_P(y) = x.GetData();
+      MFEM_VERIFY(NV_LOCLENGTH_P(y) == x.Size(), "");
+#endif
+    }
+    
+    // Integrate the system
+    double tout = t + dt;
+    flag = CVodeF(sundials_mem, tout, y, &t, step_mode, &ncheck);
+    //    flag = CVode(sundials_mem, tout, y, &t, step_mode);
+    MFEM_VERIFY(flag >= 0, "error in CVodeF()");
+
+    // Return the last incremental step size
+    flag = CVodeGetLastStep(sundials_mem, &dt);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetLastStep()");
+  }
+
+  long CVODESSolver::GetNumSteps()
+  {
+    long nst;
+    flag = CVodeGetNumSteps(sundials_mem, &nst);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetNumStep()");
+
+    return nst;
+  }
+
+  double CVODESSolver::EvalQuadIntegration(double t)
+  {
+    MFEM_VERIFY(t <= f->GetTime(), "t > current forward solver time");
+    
+    flag = CVodeGetQuad(sundials_mem, &t, q);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetQuad()");
+  }
+  
   // ---------------------------------------------------------------------------
   // ARKStep interface
   // ---------------------------------------------------------------------------

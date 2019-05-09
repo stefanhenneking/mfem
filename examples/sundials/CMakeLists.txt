@@ -11,6 +11,7 @@
 
 set(SUNDIALS_EXAMPLES_SRCS)
 list(APPEND SUNDIALS_EXAMPLES_SRCS
+  test.cpp
   ex9.cpp
   ex10.cpp
   ex16.cpp
