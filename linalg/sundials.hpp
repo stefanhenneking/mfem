@@ -151,7 +151,7 @@ namespace mfem
   {
   protected:
     int step_mode; /// CVODE step mode (CV_NORMAL or CV_ONE_STEP).
-    int root_components; /// Number of components in gout
+    int root_components; /// Number of components in gout   
     
     /// Wrapper to compute the ODE Rhs function.
     static int RHS(realtype t, const N_Vector y, N_Vector ydot, void *user_data);
@@ -246,9 +246,9 @@ namespace mfem
 
     virtual ~TimeDependentAdjointOperator(){};
 
-    virtual void QuadratureIntegration(const Vector &x, Vector &y) const = 0;
-    virtual void AdjointRateMult(const Vector &x, Vector &y) const = 0;
-    virtual void ObjectiveSensitivityMult(const Vector &x, Vector &y) const = 0;
+    virtual void QuadratureIntegration(const Vector &y, Vector &qdot) const = 0;
+    virtual void AdjointRateMult(const Vector &y, Vector & yB, Vector &yBdot) const = 0;
+    virtual void ObjectiveSensitivityMult(const Vector &y, const Vector &yB, Vector &qBdot) const = 0;
 
   protected:
     
@@ -262,22 +262,34 @@ namespace mfem
   {
   protected:
     int ncheck; // number of checkpoints used so far
+    int indexB; // backward index?
     
     /// Wrapper to compute the ODE Rhs function.
     static int fQ(realtype t, const N_Vector y, N_Vector qdot, void *user_data);
 
     static int fB(realtype t, N_Vector y, 
-		  N_Vector yB, N_Vector yBdot, void *user_dataB) { return 0; };
+		  N_Vector yB, N_Vector yBdot, void *user_dataB);
 
     static int fQB(realtype t, N_Vector y, N_Vector yB, 
-		   N_Vector qBdot, void *user_dataB) {return 0;};
+		   N_Vector qBdot, void *user_dataB);
 
     static int ewt(N_Vector y, N_Vector w, void *user_data);
 
     typedef std::function<int(Vector y, Vector w, CVODESSolver*)> EWTFunction;
     EWTFunction ewt_func;
 
-    N_Vector           q;   /// Quadrature vector.
+    SUNMatrix          AB;   /// Linear system A = I - gamma J, M - gamma J, or J.
+    SUNLinearSolver    LSB;  /// Linear solver for A.
+    N_Vector           q;    /// Quadrature vector.
+    N_Vector           yB;   /// State vector.
+    N_Vector           yy;   /// State vector.
+    N_Vector           qB;   /// State vector.
+
+    /// Default scalar tolerances.
+    static constexpr double default_rel_tolB = 1e-4;
+    static constexpr double default_abs_tolB = 1e-9;
+    static constexpr double default_abs_tolQB = 1e-9;
+    
     
   public:
     /** Construct a serial wrapper to SUNDIALS' CVODE integrator.
@@ -303,6 +315,8 @@ namespace mfem
         @note All other methods must be called after Init(). */
     void Init(TimeDependentAdjointOperator &f_, double &t, Vector &x);
 
+    void InitB(TimeDependentAdjointOperator &f_, double &tB, Vector &xB);
+    
     /** Integrate the ODE with CVODE using the specified step mode.
 
         @param[out]    x  Solution vector at the requested output timem x=x(t).
@@ -315,7 +329,7 @@ namespace mfem
     virtual void Step(Vector &x, double &t, double &dt);
 
     // Adjoint stuff
-    virtual void StepB(Vector &w, double &t, double &dt) {}
+    virtual void StepB(Vector &w, double &t, double &dt);
 
     /// Set multiplicative error weights
     void SetWFTolerances(EWTFunction func);
@@ -323,6 +337,9 @@ namespace mfem
     // Initialize Quadrature Integration
     void InitQuadIntegration(double reltolQ = 1.e-3, double abstolQ = 1e-8);
 
+    // Initialize Quadrature Integration (Adjoint)
+    void InitQuadIntegrationB(double reltolQB = 1.e-3, double abstolQB = 1e-8);
+    
     // Initialize Adjoint
     void InitAdjointSolve(int steps);
 
@@ -330,7 +347,16 @@ namespace mfem
     long GetNumSteps();
 
     // Evalute Quadrature
-    double EvalQuadIntegration(double t);
+    void EvalQuadIntegration(double t, Vector &q);
+
+    // Evaluate Quadrature solution
+    void EvalObjectiveSensitivity(double t, Vector &dG_dp);
+    
+    // Get Interpolated Forward solution y at backward integration time tB
+    void GetCorrespondingForwardSolution(double tB, mfem::Vector & yy);
+    
+    // Set Linear Solver for the backward problem
+    void SetLinearSolverB(SundialsLinearSolver &ls_spec);
     
     /// Destroy the associated CVODE memory and SUNDIALS objects.
     virtual ~CVODESSolver() {};
@@ -420,7 +446,7 @@ namespace mfem
         @note All other methods must be called after Init(). */
     void Init(TimeDependentOperator &f_, TimeDependentOperator &f2_, double &t,
               Vector &x);
-
+    
     /** Resize ARKode: Resize ARKode internal memory for the current problem.
 
         @param[in] x      the newly-sized state vector x(t).

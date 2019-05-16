@@ -55,8 +55,8 @@ public:
 
   virtual void Mult(const Vector &x, Vector &y) const;
   virtual void QuadratureIntegration(const Vector &x, Vector &y) const;
-  virtual void AdjointRateMult(const Vector &x, Vector &y) const;
-  virtual void ObjectiveSensitivityMult(const Vector &x, Vector &y) const;
+  virtual void AdjointRateMult(const Vector &y, Vector &yB, Vector &yBdot) const;
+  virtual void ObjectiveSensitivityMult(const Vector &y, const Vector &yB, Vector &qbdot) const;
 
   
 protected:
@@ -71,8 +71,8 @@ int main(int argc, char *argv[])
    const char *mesh_file = "../../data/periodic-hexagon.mesh";
    int ref_levels = 2;
    int order = 3;
-   int ode_solver_type = 1;
-   double t_final = 0.4;
+   int ode_solver_type = 4;
+   double t_final = 4e7;
    double dt = 0.01;
    bool visualization = true;
    bool visit = false;
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 
    Vector u(3);
    u = 0.;
-   u[0] = 1.;
+   u[0] = 1.;  
    
    Vector abstol_v(3);
    abstol_v[0] = 1.0e-8;
@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
 			       }
 			       );
        cvodes->SetSVtolerances(reltol, abstol_v);
-       cvodes->SetMaxStep(dt);
+       //       cvodes->SetMaxStep(dt);
        cvodes->InitQuadIntegration(1.e-6,1.e-6);
        cvodes->InitAdjointSolve(150);
        ode_solver = cvodes; break;
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
    bool done = false;
    for (int ti = 0; !done; )
    {
-      double dt_real = min(dt, t_final - t);
+      double dt_real = max(dt, t_final - t);
       ode_solver->Step(u, t, dt_real);
       ti++;
 
@@ -233,22 +233,60 @@ int main(int argc, char *argv[])
 
       if (done || ti % vis_steps == 0)
       {
-         cout << "time step: " << ti << ", time: " << t << endl;
+	//         cout << "time step: " << ti << ", time: " << t << endl;
          if (cvode) { cvode->PrintInfo(); }
          if (arkode) { arkode->PrintInfo(); }
 	 if (cvodes) { cvodes->PrintInfo(); }
 
       }
    }
-
+   
    cout << "Final Solution: " << t << endl;
    u.Print();
 
    if (cvodes) {
+     Vector q;
      cout << " Final Quadrature " << endl;
-     cout << cvodes->EvalQuadIntegration(t) << endl;
+     cvodes->EvalQuadIntegration(t, q);
+     q.Print();
    }
 
+   // backward portion
+   Vector w(3);
+   double TBout1 = 40.;
+   Vector dG_dp(3);
+   if (cvodes) {
+     t = t_final;
+     cvodes->InitB(adv, t, w);
+     cvodes->InitQuadIntegrationB(1.e-6, 1.e-6);
+
+     // Results at time TBout1
+     double dt_real = max(dt, t - TBout1);
+     cvodes->StepB(w, t, dt_real);
+     cvodes->GetCorrespondingForwardSolution(t, u);
+     cout << "t: " << t << endl;
+     cout << "w:" << endl;
+     w.Print();
+     cout << "u:" << endl;
+     u.Print();
+
+     // Results at T0
+     dt_real = max(dt, t - 0.);
+     cvodes->StepB(w, t, dt_real);
+     cvodes->GetCorrespondingForwardSolution(t, u);
+     cout << "t: " << t << endl;
+     cout << "w:" << endl;
+     w.Print();
+     cout << "u:" << endl;
+     u.Print();
+
+     // Evaluate Sensitivity
+     cvodes->EvalObjectiveSensitivity(t, dG_dp);
+     cout << "dG/dp:" << endl;
+     dG_dp.Print();
+     
+   }
+   
    // 10. Free the used memory.
    delete ode_solver;
    
@@ -270,11 +308,26 @@ void RobertsSUNDIALS::QuadratureIntegration(const Vector &y, Vector &qdot) const
 }
 
 
-void RobertsSUNDIALS::AdjointRateMult(const Vector &x, Vector &y) const
+void RobertsSUNDIALS::AdjointRateMult(const Vector &y, Vector & yB, Vector &yBdot) const
 {
+  double l21 = (yB[1]-yB[0]);
+  double l32 = (yB[2]-yB[1]);
+  double p1 = p_[0];
+  double p2 = p_[1];
+  double p3 = p_[2];
+  yBdot[0] = -p1 * l21;
+  yBdot[1] = p2 * y[2] * l21 - 2. * p3 * y[1] * l32;
+  yBdot[2] = p2 * y[1] * l21 - 1.0;
 }
 
-void RobertsSUNDIALS::ObjectiveSensitivityMult(const Vector &x, Vector &y) const
+void RobertsSUNDIALS::ObjectiveSensitivityMult(const Vector &y, const Vector &yB, Vector &qBdot) const
 {
+  double l21 = (yB[1]-yB[0]);
+  double l32 = (yB[2]-yB[1]);
+  double y23 = y[1] * y[2];
+
+  qBdot[0] = y[0] * l21;
+  qBdot[1] = -y23 * l21;
+  qBdot[2] = y[1]*y[1]*l32;
 }
 

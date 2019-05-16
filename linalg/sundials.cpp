@@ -18,6 +18,7 @@
 #include "hypre.hpp"
 #endif
 
+#include <sunlinsol/sunlinsol_dense.h> /* access to dense SUNLinearSolver      */
 #include <sundials/sundials_config.h>
 #include <sundials/sundials_matrix.h>
 #include <sundials/sundials_linearsolver.h>
@@ -120,7 +121,7 @@ namespace mfem
     // Compute the linear system
     return(GetObj(A)->ODELinSys(t, mfem_y, mfem_fy, jok, jcur, gamma));
   }
-
+  
   static int arkLinSysSetup(realtype t, N_Vector y, N_Vector fy, SUNMatrix A,
                             SUNMatrix M, booleantype jok, booleantype *jcur,
                             realtype gamma, void *user_data, N_Vector tmp1,
@@ -212,13 +213,12 @@ namespace mfem
       // Allocate an empty serial N_Vector
       y = N_VNewEmpty_Serial(0);
       MFEM_VERIFY(y, "error in N_VNewEmpty_Serial()");
-
+      
     } else {
 
       // Allocate an empty parallel N_Vector
       y = N_VNewEmpty_Parallel(comm, 0, 0);  // calls MPI_Allreduce()
       MFEM_VERIFY(y, "error in N_VNewEmpty_Parallel()");
-
     }
 
     // Initialize the step mode
@@ -434,9 +434,10 @@ namespace mfem
 
   CVODESSolver::CVODESSolver(int lmm) :
     CVODESolver(lmm),
-    ncheck(0)
+    ncheck(0),
+    indexB(0)
   {
-
+    
   }
   
   void CVODESSolver::InitAdjointSolve(int steps)
@@ -460,19 +461,162 @@ namespace mfem
     MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeQuadSStolerances");
     
   }
+
+  // For now just do some kind of default
+  void CVODESSolver::InitQuadIntegrationB(double reltolQB, double abstolQB)
+  {
+    qB = N_VNew_Serial(3);    
+
+    flag = CVodeQuadInitB(sundials_mem, indexB, fQB, qB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeQuadInitB()");
+
+    flag = CVodeSetQuadErrConB(sundials_mem, indexB, SUNTRUE);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeSetQuadErrConB");
+
+    flag = CVodeQuadSStolerancesB(sundials_mem, indexB, reltolQB, abstolQB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "Error in CVodeQuadSStolerancesB");
+    
+  }
+
   
   void CVODESSolver::Init(TimeDependentAdjointOperator &f_, double &t, Vector &x)
   {
     CVODESolver::Init(f_, t, x);
   }
 
+  void CVODESSolver::InitB(TimeDependentAdjointOperator &f_, double &tB, Vector &xB)
+  {
+    // Create the solver memory
+    flag = CVodeCreateB(sundials_mem, CV_BDF, &indexB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeCreateB()");
 
+    // Allocate an empty serial N_Vector
+    yB = N_VNewEmpty_Serial(0);
+    MFEM_VERIFY(y, "error in N_VNewEmpty_Serial()");
+
+    yy = N_VNewEmpty_Serial(0);
+    MFEM_VERIFY(yy, "error in N_VNewEmpty_Serial()");   
+
+    int loc_size = f_.Height();
+    // Also initialize Adjoint related vectors
+    // Fill N_Vector wrapper with initial condition data
+    if (!Parallel()) {
+      NV_LENGTH_S(yB) = xB.Size();
+      NV_DATA_S(yB)   = xB.GetData();
+    } else {
+#ifdef MFEM_USE_MPI
+      long local_size = loc_size, global_size;
+      MPI_Allreduce(&local_size, &global_size, 1, MPI_LONG, MPI_SUM,
+                    NV_COMM_P(yB));
+      NV_LOCLENGTH_P(yB)  = xB.Size();
+      NV_GLOBLENGTH_P(yB) = global_size;
+      NV_DATA_P(yB)       = xB.GetData();
+#endif
+    }
+    
+    // Initiailize forward solver output
+    yy = N_VNew_Serial(NV_LENGTH_S(y));    
+
+    // Initialize CVODE
+    flag = CVodeInitB(sundials_mem, indexB, fB, tB, yB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeInit()");
+
+    // Attach the CVODESSolver as user-defined data
+    flag = CVodeSetUserDataB(sundials_mem, indexB, this);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetUserDataB()");
+
+    // Set default tolerances
+    flag = CVodeSStolerancesB(sundials_mem, indexB, default_rel_tolB, default_abs_tolB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetSStolerancesB()");
+
+    // // Set default linear solver (Newton is the default Nonlinear Solver)
+    // LSB = SUNLinSol_SPGMR(yB, PREC_NONE, 0);
+    // MFEM_VERIFY(LSB, "error in SUNLinSol_SPGMR()");
+
+    // flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, NULL);
+    // MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
+
+    /* Create dense SUNMatrix for use in linear solves */
+    AB = SUNDenseMatrix(loc_size, loc_size);
+    MFEM_VERIFY(AB, "error creating AB");
+    
+    /* Create dense SUNLinearSolver object */
+    LSB = SUNLinSol_Dense(yB, AB);
+    MFEM_VERIFY(LSB, "error in SUNLinSol_Dense()");
+    
+    /* Attach the matrix and linear solver */
+    flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
+
+  }
+
+  // void CVODESSolver::SetLinearSolverB(SundialsLinearSolver &ls_spec)
+  // {
+  //   // Free any existing linear solver
+  //   if (LSB != NULL) { SUNLinSolFree(LSB); LSB = NULL; }
+
+  //   // Wrap linear solver as SUNLinearSolver and SUNMatrix
+  //   LSB = SUNLinSolNewEmpty();
+  //   MFEM_VERIFY(sundials_mem, "error in SUNLinSolNewEmpty()");
+
+  //   LSB->content         = &ls_spec;
+  //   LSB->ops->gettype    = LSGetType;
+  //   LSB->ops->initialize = LSInit;
+  //   LSB->ops->setup      = LSSetup;
+  //   LSB->ops->solve      = LSSolve;
+  //   LSB->ops->free       = LSFree;
+
+  //   AB = SUNMatNewEmpty();
+  //   MFEM_VERIFY(sundials_mem, "error in SUNMatNewEmpty()");
+
+  //   AB->content      = &ls_spec;
+  //   AB->ops->getid   = MatGetID;
+  //   AB->ops->destroy = MatDestroy;
+
+  //   // Attach the linear solver and matrix
+  //   flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
+  //   MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolver()");
+
+  //   // Todo: JW Requires rigging up ODELinSys and SundialsSetup in a SundialsSolver
+  //   // Set the linear system evaluation function
+  //   // flag = CVodeSetLinSysFnB(sundials_mem, indexB, cvLinSysSetupB);
+  //   // MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinSysFnB()");
+  // }
+
+  
   int CVODESSolver::fQ(realtype t, const N_Vector y, N_Vector qdot, void *user_data)
   {
     CVODESSolver *self = static_cast<CVODESSolver*>(user_data);
     Vector mfem_y(y);
     Vector mfem_qdot(qdot);
-    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);    
+    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);
+    f->SetTime(t);
+    f->QuadratureIntegration(mfem_y, mfem_qdot);
+    return 0;
+  }
+
+  int CVODESSolver::fQB(realtype t, N_Vector y, N_Vector yB, N_Vector qBdot, void *user_dataB)
+  {
+    CVODESSolver *self = static_cast<CVODESSolver*>(user_dataB);
+    Vector mfem_y(y);
+    Vector mfem_yB(yB);
+    Vector mfem_qBdot(qBdot);
+    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);
+    f->SetTime(t);
+    f->ObjectiveSensitivityMult(mfem_y, mfem_yB, mfem_qBdot);
+    return 0;   
+  }
+
+  int CVODESSolver::fB(realtype t, N_Vector y, N_Vector yB, N_Vector yBdot, void *user_dataB)
+  {
+    CVODESSolver *self = static_cast<CVODESSolver*>(user_dataB);
+    Vector mfem_y(y);
+    Vector mfem_yB(yB);
+    Vector mfem_yBdot(yBdot);
+    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);
+    f->SetTime(t);
+    f->AdjointRateMult(mfem_y, mfem_yB, mfem_yBdot);    
+    return 0;
   }
   
   int CVODESSolver::ewt(N_Vector y, N_Vector w, void *user_data)
@@ -514,6 +658,44 @@ namespace mfem
     MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetLastStep()");
   }
 
+  void CVODESSolver::StepB(Vector &xB, double &tB, double &dtB)
+  {
+    if (!Parallel()) {
+      NV_DATA_S(yB) = xB.GetData();
+      MFEM_VERIFY(NV_LENGTH_S(yB) == xB.Size(), "");
+    } else {
+#ifdef MFEM_USE_MPI
+      NV_DATA_P(yB) = xB.GetData();
+      MFEM_VERIFY(NV_LOCLENGTH_P(yB) == xB.Size(), "");
+#endif
+    }
+    
+    // Integrate the system
+    double tout = tB - dtB;
+    flag = CVodeB(sundials_mem, tout, step_mode);
+    MFEM_VERIFY(flag >= 0, "error in CVodeB()");
+
+    /* Call CVodeGetB to get yB of the backward ODE problem. */
+    flag = CVodeGetB(sundials_mem, indexB, &tB, yB);
+    MFEM_VERIFY(flag >= 0, "error in CVodeGetB()");
+
+    // // JW : Is there a LastStepB?
+    // // Return the last incremental step size
+    // flag = CVodeGetLastStep(sundials_mem, &dtB);
+    // MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetLastStep()");
+  }
+
+  void CVODESSolver::GetCorrespondingForwardSolution(double tB, mfem::Vector & yyy)
+  {
+    Vector mfem_yyy(yy);
+
+    flag = CVodeGetAdjY(sundials_mem, tB, yy);
+    MFEM_VERIFY(flag >= 0, "error in CVodeGetAdjY()");
+
+    yyy = mfem_yyy;
+  }
+  
+  
   long CVODESSolver::GetNumSteps()
   {
     long nst;
@@ -523,13 +705,28 @@ namespace mfem
     return nst;
   }
 
-  double CVODESSolver::EvalQuadIntegration(double t)
+  void CVODESSolver::EvalQuadIntegration(double t, Vector & Q)
   {
     MFEM_VERIFY(t <= f->GetTime(), "t > current forward solver time");
     
     flag = CVodeGetQuad(sundials_mem, &t, q);
     MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetQuad()");
+
+    Vector mfem_q(q);
+    Q = mfem_q;
   }
+
+  void CVODESSolver::EvalObjectiveSensitivity(double t, Vector &dG_dp)
+  {
+    MFEM_VERIFY(t <= f->GetTime(), "t > current forward solver time");
+    
+    flag = CVodeGetQuadB(sundials_mem, indexB, &t, qB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeGetQuadB()");
+    Vector mfem_qB(qB);
+    dG_dp = mfem_qB;
+    dG_dp *= -1.;
+  }
+
   
   // ---------------------------------------------------------------------------
   // ARKStep interface
