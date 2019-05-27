@@ -135,14 +135,27 @@ Vector &Vector::operator=(const Vector &v)
 Vector &Vector::operator=(double value)
 {
    DeviceVector y(data, size);
-   MFEM_FORALL(i, size, y[i] = value;);
+   //MFEM_FORALL(i, size, y[i] = value;);
+
+   GET_PTR(data);
+   double ref_value = value;
+   MFEM_FORALL(i, size,
+   {
+     //y[i] = value;
+     d_data[i] = ref_value;
+   });               
+
    return *this;
 }
 
 Vector &Vector::operator*=(double c)
 {
-   DeviceVector y(data, size);
-   MFEM_FORALL(i, size, y[i] *= c;);
+  //DeviceVector y(data, size);
+   GET_PTR(data);
+   MFEM_FORALL(i, size,
+   { 
+     d_data[i] *= c;
+   });
    return *this;
 }
 
@@ -204,7 +217,14 @@ Vector &Vector::Add(const double a, const Vector &Va)
       const int N = size;
       DeviceVector y(data, N);
       const DeviceVector x(Va, N);
-      MFEM_FORALL(i, N, y[i] += a * x[i];);
+      GET_PTR(data);
+      GET_PTR(Va);
+      double a_ref = a;
+      MFEM_FORALL(i, N,
+      {
+        //y[i] += a * x[i];
+        d_data[i] += a_ref * d_Va[i];
+      });
    }
    return *this;
 }
@@ -267,10 +287,19 @@ void add(const Vector &v1, const Vector &v2, Vector &v)
    }
 #else
    const int N = v.size;
-   DeviceVector y(v, N);
-   const DeviceVector x1(v1, N);
-   const DeviceVector x2(v2, N);
-   MFEM_FORALL(i, N, y[i] = x1[i] + x2[i];);
+
+   //DeviceVector y(v, N);
+   //const DeviceVector x1(v1, N);
+   //const DeviceVector x2(v2, N);
+   GET_PTR(v);
+   GET_PTR(v1);
+   GET_PTR(v2);
+
+   //MFEM_FORALL(i, N, y[i] = x1[i] + x2[i];);
+   MFEM_FORALL(i, N,
+   { 
+     d_v[i] = d_v1[i] + d_v2[i];
+   });
 #endif
 }
 
@@ -304,10 +333,21 @@ void add(const Vector &v1, double alpha, const Vector &v2, Vector &v)
       }
 #endif
       const int N = s;
-      DeviceVector d_z(vp, N);
-      const DeviceVector d_x(v1p, N);
-      const DeviceVector d_y(v2p, N);
-      MFEM_FORALL(i, N, d_z[i] = d_x[i] + alpha * d_y[i];);
+      //DeviceVector d_z(vp, N);
+      //const DeviceVector d_x(v1p, N);
+      //const DeviceVector d_y(v2p, N);
+      //MFEM_FORALL(i, N, d_z[i] = d_x[i] + alpha * d_y[i];);
+
+
+      GET_PTR(vp);
+      GET_PTR(v1p);
+      GET_PTR(v2p);
+      double alpha_ref = alpha;
+      MFEM_FORALL(i, N,
+      { 
+        d_vp[i] = d_v1p[i] + alpha_ref * d_v2p[i]; 
+      });
+
    }
 }
 

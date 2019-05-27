@@ -592,11 +592,19 @@ void SparseMatrix::AddMult(const Vector &x, Vector &y, const double a) const
    if (a == 1.0)
    {
 #ifndef MFEM_USE_OPENMP
+     /*     
       const DeviceArray d_I(I);
       const DeviceArray d_J(J);
       const DeviceVector d_A(A);
       const DeviceVector d_x(x, x.Size());
       DeviceVector d_y(y, y.Size());
+     */
+     GET_PTR_T(I, int);
+     GET_PTR_T(J, int);
+     GET_PTR(A);
+     GET_PTR(x);
+     GET_PTR(y);
+     
       MFEM_FORALL(i, height,
       {
          double d = 0.0;
