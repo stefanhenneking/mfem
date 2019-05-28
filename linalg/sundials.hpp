@@ -70,7 +70,7 @@ namespace mfem
 
   public:
     /** Setup the ODE linear system A(y,t) = (I - gamma J) or A = (M - gamma J).
-        @param[in]  t     The time at which A(y,t)  should be evaluated
+        @param[in]  t     The time at which A(y,t) should be evaluated
         @param[in]  y     The state at which A(y,t) should be evaluated
         @param[in]  fy    The current value of the ODE Rhs function, f(y,t)
         @param[in]  jok   Flag indicating if the Jacobian should be updated
@@ -149,12 +149,27 @@ namespace mfem
 
   class CVODESolver : public ODESolver, public SundialsSolver
   {
+  private:
+    /// Utility function for creating CVODE.
+    void Create(double &t, Vector &x);
+
   protected:
+    int lmm_type;  /// linear multistep method type
     int step_mode; /// CVODE step mode (CV_NORMAL or CV_ONE_STEP).
     int root_components; /// Number of components in gout   
-    
+
     /// Wrapper to compute the ODE Rhs function.
     static int RHS(realtype t, const N_Vector y, N_Vector ydot, void *user_data);
+
+    /// Setup the linear system A x = b
+    static int LinSysSetup(realtype t, N_Vector y, N_Vector fy, SUNMatrix A,
+                           booleantype jok, booleantype *jcur,
+                           realtype gamma, void *user_data, N_Vector tmp1,
+                           N_Vector tmp2, N_Vector tmp3);
+
+    /// Solve the linear system A x = b
+    static int LinSysSolve(SUNLinearSolver LS, SUNMatrix A, N_Vector x,
+                           N_Vector b, realtype tol);
 
     static int root(realtype t, N_Vector y, realtype *gout, void *user_data);
     
@@ -204,6 +219,9 @@ namespace mfem
         @param[in] ls_spec A SundialsLinearSolver object defining the custom
                            linear solver */
     void SetLinearSolver(SundialsLinearSolver &ls_spec);
+
+    /** Attach a custom linear solver solver to CVODE. */
+    void SetLinearSolver();
 
     /** Select the CVODE step mode: CV_NORMAL (default) or CV_ONE_STEP.
         @param[in] itask  The desired step mode */
@@ -378,9 +396,9 @@ namespace mfem
     enum Type { EXPLICIT, IMPLICIT, IMEX };
 
   protected:
+    Type rk_type;      /// Runge-Kutta type
     int step_mode;     /// ARKStep step mode (ARK_NORMAL or ARK_ONE_STEP).
     bool use_implicit; /// true for implicit or imex integration
-    Type rk_type;
 
     /// Wrappers to compute the ODE Rhs functions. RHS1 is explicit RHS and RHS2
     /// the implicit RHS for IMEX integration. When purely implicit or explicit
@@ -446,7 +464,7 @@ namespace mfem
         @note All other methods must be called after Init(). */
     void Init(TimeDependentOperator &f_, TimeDependentOperator &f2_, double &t,
               Vector &x);
-    
+
     /** Resize ARKode: Resize ARKode internal memory for the current problem.
 
         @param[in] x      the newly-sized state vector x(t).
