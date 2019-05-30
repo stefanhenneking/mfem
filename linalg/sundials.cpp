@@ -23,9 +23,6 @@
 #include <sundials/sundials_matrix.h>
 #include <sundials/sundials_linearsolver.h>
 #include <nvector/nvector_serial.h>
-#ifdef MFEM_USE_MPI
-#include <nvector/nvector_parallel.h>
-#endif
 
 #include <cvodes/cvodes.h>
 #include <sunlinsol/sunlinsol_spgmr.h>
@@ -210,27 +207,14 @@ namespace mfem
     : lmm_type(lmm), step_mode(CV_NORMAL)
   {
     // Allocate an empty serial N_Vector
-    y = N_VNewEmpty_Serial(0);
-    MFEM_VERIFY(y, "error in N_VNewEmpty_Serial()");
+    AllocateEmptyN_Vector(y);
   }
 
 #ifdef MFEM_USE_MPI
   CVODESolver::CVODESolver(MPI_Comm comm, int lmm)
     : lmm_type(lmm), step_mode(CV_NORMAL)
   {
-    if (comm == MPI_COMM_NULL) {
-
-      // Allocate an empty serial N_Vector
-      y = N_VNewEmpty_Serial(0);
-      MFEM_VERIFY(y, "error in N_VNewEmpty_Serial()");
-
-    } else {
-
-      // Allocate an empty parallel N_Vector
-      y = N_VNewEmpty_Parallel(comm, 0, 0);  // calls MPI_Allreduce()
-      MFEM_VERIFY(y, "error in N_VNewEmpty_Parallel()");
-
-    }
+    AllocateEmptyN_Vector(y, comm);
   }
 #endif
 
@@ -261,18 +245,8 @@ namespace mfem
     } else {
 
       // Check that data is the same size and update array data
-      if (!Parallel()) {
-        MFEM_VERIFY(NV_LENGTH_S(y) == x.Size(),
-                    "error CVODE does not support resizing");
-        NV_DATA_S(y) = x.GetData();
-      } else {
-#ifdef MFEM_USE_MPI
-        MFEM_VERIFY(NV_LOCLENGTH_P(y) == x.Size(),
-                    "error CVODE does not support resizing");
-        NV_DATA_P(y) = x.GetData();
-#endif
-      }
-
+      VerifyN_Vector(y, x);
+      
       // Reinitialize CVODE memory
       flag = CVodeReInit(sundials_mem, t, y);
       MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeReInit()");
@@ -283,20 +257,7 @@ namespace mfem
   void CVODESolver::Create(double &t, Vector &x)
   {
     // Fill N_Vector wrapper with initial condition data
-    if (!Parallel()) {
-      NV_LENGTH_S(y) = x.Size();
-      NV_DATA_S(y)   = x.GetData();
-    } else {
-#ifdef MFEM_USE_MPI
-      long local_size = x.Size();
-      long global_size;
-      MPI_Allreduce(&local_size, &global_size, 1, MPI_LONG, MPI_SUM,
-                    NV_COMM_P(y));
-      NV_LOCLENGTH_P(y)  = x.Size();
-      NV_GLOBLENGTH_P(y) = global_size;
-      NV_DATA_P(y)       = x.GetData();
-#endif
-    }
+    FillN_Vector(y, x);
 
     // Create CVODE
     sundials_mem = CVodeCreate(lmm_type);
@@ -324,16 +285,9 @@ namespace mfem
 
   void CVODESolver::Step(Vector &x, double &t, double &dt)
   {
-    if (!Parallel()) {
-      NV_DATA_S(y) = x.GetData();
-      MFEM_VERIFY(NV_LENGTH_S(y) == x.Size(), "");
-    } else {
-#ifdef MFEM_USE_MPI
-      NV_DATA_P(y) = x.GetData();
-      MFEM_VERIFY(NV_LOCLENGTH_P(y) == x.Size(), "");
-#endif
-    }
 
+    VerifyN_Vector(y, x);
+    
     // Integrate the system
     double tout = t + dt;
     flag = CVode(sundials_mem, tout, y, &t, step_mode);
@@ -500,13 +454,48 @@ namespace mfem
   // CVODES interface
   // ---------------------------------------------------------------------------
 
+  void CVODESSolver::CreateB(double &tB, Vector &xB)
+  {
+    // Fill N_Vector wrapper with initial condition data
+    FillN_Vector(yB, xB);
+
+    // Create the solver memory
+    flag = CVodeCreateB(sundials_mem, CV_BDF, &indexB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeCreateB()");
+    
+    // Initialize CVODEB
+    flag = CVodeInitB(sundials_mem, indexB, fB, tB, yB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeInit()");
+
+    // Attach the CVODESSolver as user-defined data
+    flag = CVodeSetUserDataB(sundials_mem, indexB, this);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetUserDataB()");
+
+    // Set default tolerances
+    flag = CVodeSStolerancesB(sundials_mem, indexB, default_rel_tolB, default_abs_tolB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetSStolerancesB()");
+
+  }
+  
   CVODESSolver::CVODESSolver(int lmm) :
     CVODESolver(lmm),
     ncheck(0),
     indexB(0)
   {
-    
+    AllocateEmptyN_Vector(yB);
+    AllocateEmptyN_Vector(yy);
   }
+  
+#ifdef MFEM_USE_MPI
+  CVODESSolver::CVODESSolver(MPI_Comm comm, int lmm) :
+    CVODESolver(comm, lmm),
+    ncheck(0),
+    indexB(0)
+  {
+    AllocateEmptyN_Vector(yB, comm);
+    AllocateEmptyN_Vector(yy, comm);
+  }
+#endif
   
   void CVODESSolver::InitAdjointSolve(int steps)
   {
@@ -554,49 +543,13 @@ namespace mfem
 
   void CVODESSolver::InitB(TimeDependentAdjointOperator &f_, double &tB, Vector &xB)
   {
-    // Create the solver memory
-    flag = CVodeCreateB(sundials_mem, CV_BDF, &indexB);
-    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeCreateB()");
-
-    // Allocate an empty serial N_Vector
-    yB = N_VNewEmpty_Serial(0);
-    MFEM_VERIFY(y, "error in N_VNewEmpty_Serial()");
-
-    yy = N_VNewEmpty_Serial(0);
-    MFEM_VERIFY(yy, "error in N_VNewEmpty_Serial()");   
 
     int loc_size = f_.Height();
-    // Also initialize Adjoint related vectors
-    // Fill N_Vector wrapper with initial condition data
-    if (!Parallel()) {
-      NV_LENGTH_S(yB) = xB.Size();
-      NV_DATA_S(yB)   = xB.GetData();
-    } else {
-#ifdef MFEM_USE_MPI
-      long local_size = loc_size, global_size;
-      MPI_Allreduce(&local_size, &global_size, 1, MPI_LONG, MPI_SUM,
-                    NV_COMM_P(yB));
-      NV_LOCLENGTH_P(yB)  = xB.Size();
-      NV_GLOBLENGTH_P(yB) = global_size;
-      NV_DATA_P(yB)       = xB.GetData();
-#endif
-    }
-    
     // Initiailize forward solver output
     yy = N_VNew_Serial(NV_LENGTH_S(y));    
 
-    // Initialize CVODE
-    flag = CVodeInitB(sundials_mem, indexB, fB, tB, yB);
-    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeInit()");
-
-    // Attach the CVODESSolver as user-defined data
-    flag = CVodeSetUserDataB(sundials_mem, indexB, this);
-    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetUserDataB()");
-
-    // Set default tolerances
-    flag = CVodeSStolerancesB(sundials_mem, indexB, default_rel_tolB, default_abs_tolB);
-    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetSStolerancesB()");
-
+    CreateB(tB, xB);
+    
     // // Set default linear solver (Newton is the default Nonlinear Solver)
     // LSB = SUNLinSol_SPGMR(yB, PREC_NONE, 0);
     // MFEM_VERIFY(LSB, "error in SUNLinSol_SPGMR()");

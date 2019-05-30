@@ -41,6 +41,11 @@
 
 #include <functional>
 
+#ifdef MFEM_USE_MPI
+#include <nvector/nvector_parallel.h>
+#endif
+
+
 namespace mfem
 {
   // ---------------------------------------------------------------------------
@@ -135,6 +140,55 @@ namespace mfem
     SundialsSolver() : sundials_mem(NULL), flag(0), y(NULL), A(NULL), M(NULL),
                        LSA(NULL), LSM(NULL), NLS(NULL) { }
 
+    void FillN_Vector(N_Vector &y, Vector &x)
+    {
+      // Fill N_Vector wrapper with initial condition data
+      if (!Parallel()) {
+	NV_LENGTH_S(y) = x.Size();
+	NV_DATA_S(y)   = x.GetData();
+      } else {
+#ifdef MFEM_USE_MPI
+	long local_size = x.Size();
+	long global_size;
+	MPI_Allreduce(&local_size, &global_size, 1, MPI_LONG, MPI_SUM,
+		      NV_COMM_P(y));
+	NV_LOCLENGTH_P(y)  = x.Size();
+	NV_GLOBLENGTH_P(y) = global_size;
+	NV_DATA_P(y)       = x.GetData();
+#endif
+      }
+    }
+
+    void VerifyN_Vector(N_Vector &y, Vector x)
+    {
+      if (!Parallel()) {
+	NV_DATA_S(y) = x.GetData();
+	MFEM_VERIFY(NV_LENGTH_S(y) == x.Size(), "");
+      } else {
+#ifdef MFEM_USE_MPI
+	NV_DATA_P(y) = x.GetData();
+	MFEM_VERIFY(NV_LOCLENGTH_P(y) == x.Size(), "");
+#endif
+      }
+    }
+
+    void AllocateEmptyN_Vector(N_Vector &y, MPI_Comm comm = MPI_COMM_NULL)
+    {
+      if (comm == MPI_COMM_NULL) {
+
+	// Allocate an empty serial N_Vector
+	y = N_VNewEmpty_Serial(0);
+	MFEM_VERIFY(y, "error in N_VNewEmpty_Serial()");
+
+      } else {
+#ifdef MFEM_USE_MPI	
+	// Allocate an empty parallel N_Vector
+	y = N_VNewEmpty_Parallel(comm, 0, 0);  // calls MPI_Allreduce()
+	MFEM_VERIFY(y, "error in N_VNewEmpty_Parallel()");
+#endif
+      }      
+    }
+    
   public:
     /// Access the SUNDIALS memory structure.
     void *GetMem() const { return sundials_mem; }
@@ -322,7 +376,7 @@ namespace mfem
         @param[in] lmm  Specifies the linear multistep method, the options are:
                         CV_ADAMS - implicit methods for non-stiff systems
                         CV_BDF   - implicit methods for stiff systems */
-    CVODESSolver(MPI_Comm comm, int lmm) : CVODESolver( comm, lmm) {}
+    CVODESSolver(MPI_Comm comm, int lmm);
 #endif
 
     /** Initialize CVODE: Calls CVodeInit() and sets some defaults.
@@ -378,6 +432,10 @@ namespace mfem
     
     /// Destroy the associated CVODE memory and SUNDIALS objects.
     virtual ~CVODESSolver() {};
+
+  private:
+    void CreateB(double &t, Vector &x);
+    
   };
 
   
