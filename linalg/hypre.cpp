@@ -832,6 +832,13 @@ HypreParMatrix::HypreParMatrix(const HypreParMatrix &P)
 
    height = GetNumRows();
    width = GetNumCols();
+
+   CopyRowStarts();
+   CopyColStarts();
+
+   hypre_ParCSRMatrixSetNumNonzeros(A);
+
+   hypre_MatvecCommPkgCreate(A);
 }
 
 void HypreParMatrix::MakeRef(const HypreParMatrix &master)
