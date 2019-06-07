@@ -65,8 +65,17 @@ double weight_fun(const Vector &x);
 
 double ind_values(const Vector &x)
 {
-   const int opt = 6;
+   const int opt = 0;
    const double small = 0.001, big = 0.01;
+
+   if (opt == 0)
+   {
+      const double X = x(0), slope = 50.0;
+      const double ind = std::tanh(slope * (X - 0.45)) -
+                         std::tanh(slope * (X - 0.55));
+
+      return ind;
+   }
 
    // Sine wave.
    if (opt==1)
@@ -454,10 +463,28 @@ int main (int argc, char *argv[])
       {
          target_t = TargetConstructor::GIVEN_FULL;
          AnalyticAdaptTC *tc = new AnalyticAdaptTC(target_t);
+
+         size.SetSpace(&ind_fes);
+         FunctionCoefficient ind_coeff(ind_values);
+         size.ProjectCoefficient(ind_coeff);
+         if (visualization)
+         {
+            osockstream sock(19916, "localhost");
+            sock << "solution\n";
+            mesh->Print(sock);
+            size.Save(sock);
+            sock.send();
+            sock << "window_title 'Adaptivity Function'\n"
+                 << "window_geometry "
+                 << 0 << " " << 600 << " " << 600 << " " << 600 << "\n"
+                 << "keys jRmclA" << endl;
+         }
+
          adapt_coeff = new HessianCoefficient(dim, 1);
          tc->SetAnalyticTargetSpec(NULL, NULL, adapt_coeff);
          target_c = tc;
          break;
+
       }
       case 5:
       {
