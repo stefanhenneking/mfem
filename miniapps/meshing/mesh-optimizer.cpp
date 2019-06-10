@@ -467,6 +467,7 @@ int main (int argc, char *argv[])
          size.SetSpace(&ind_fes);
          FunctionCoefficient ind_coeff(ind_values);
          size.ProjectCoefficient(ind_coeff);
+         std::cout << "L1 Error: " << size.ComputeL1Error(ind_coeff) << std::endl;
          if (visualization)
          {
             osockstream sock(19916, "localhost");
