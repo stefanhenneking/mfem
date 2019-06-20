@@ -273,6 +273,7 @@ if (MFEM_USE_PUMI)
   endif()
 endif()
 
+<<<<<<< HEAD
 # CUDA
 if (MFEM_USE_CUDA)
    set(CMAKE_CUDA_STANDARD 11)
@@ -310,6 +311,13 @@ if (MFEM_USE_ADIOS2)
    endif()
 endif()
 
+=======
+# ADIOS2
+if (MFEM_USE_ADIOS2)
+  find_package(ADIOS2 REQUIRED)
+endif()
+
+>>>>>>> Added FindADIOS2.cmake
 # MFEM_TIMER_TYPE
 if (NOT DEFINED MFEM_TIMER_TYPE)
   if (APPLE)
@@ -335,7 +343,11 @@ endif()
 #    be before SuiteSparse.
 set(MFEM_TPLS MPI_CXX OPENMP BLAS LAPACK METIS HYPRE SuiteSparse SUNDIALS PETSC
     MESQUITE SuperLUDist STRUMPACK AXOM CONDUIT GECKO GNUTLS NETCDF MPFR PUMI
+<<<<<<< HEAD
     POSIXCLOCKS MFEMBacktrace ZLIB OCCA RAJA)
+=======
+    POSIXCLOCKS MFEMBacktrace ZLIB ADIOS2)
+>>>>>>> Added FindADIOS2.cmake
 # Add all *_FOUND libraries in the variable TPL_LIBRARIES.
 set(TPL_LIBRARIES "")
 set(TPL_INCLUDE_DIRS "")
