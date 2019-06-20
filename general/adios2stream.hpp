@@ -57,6 +57,10 @@ class adios2stream
 
 public:
 
+   /** true : engine step is active after engine.BeginStep(),
+    *  false: inactive after engine.EndStep() */
+   bool active_step = false;
+
    /**
     * Open modes for adios2stream (from fstream)
     * out: write
@@ -152,7 +156,7 @@ private:
    const std::string name;
 
    /** placeholder for engine openmode */
-   const adios2::Mode adios2openmode;
+   const adios2::Mode adios2_openmode;
 
    /** main adios2 object that owns all the io and engine components */
    std::shared_ptr<adios2::ADIOS> adios;
@@ -162,9 +166,6 @@ private:
 
    /** heavy object doing system-level I/O operations */
    adios2::Engine engine;
-
-   static const std::array<uint32_t,7> glvis2vtk;
-   static const std::vector<std::string> glvis_types;
 
    /**
     * convert openmode input to adios2::Mode format for adios2openmode placeholder

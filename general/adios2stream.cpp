@@ -13,15 +13,11 @@
 namespace mfem
 {
 
-const std::array<uint32_t,7> adios2stream::glvis2vtk{1, 3, 5, 8, 10, 11, 13};
-const std::vector<std::string> adios2stream::glvis_types
-{
-   "POINTS", "SEGMENT", "TRIANGLE", "SQUARE", "TETRAHEDRON", "CUBE", "PRISM"};
 //PUBLIC
 #ifdef MFEM_USE_MPI
 adios2stream::adios2stream(const std::string &name, const openmode mode,
                            MPI_Comm comm, const std::string engineType):
-   name(name), adios2openmode(ToADIOS2Mode(mode)),
+   name(name), adios2_openmode(ToADIOS2Mode(mode)),
    adios(std::make_shared<adios2::ADIOS>(comm)),
    io( adios->DeclareIO(name) )
 {
@@ -31,7 +27,7 @@ adios2stream::adios2stream(const std::string &name, const openmode mode,
 adios2stream::adios2stream(const std::string &name, const openmode mode,
                            MPI_Comm comm, const std::string &configFile,
                            const std::string ioInConfigFile) :
-   name(name), adios2openmode(ToADIOS2Mode(mode)),
+   name(name), adios2_openmode(ToADIOS2Mode(mode)),
    adios(std::make_shared<adios2::ADIOS>(configFile, comm)),
    io( adios->DeclareIO(ioInConfigFile) )
 {
@@ -49,7 +45,7 @@ adios2stream::adios2stream(const std::string &name, const openmode mode,
 #else
 adios2stream::adios2stream(const std::string &name, const openmode mode,
                            const std::string engineType) :
-   name(name), adios2openmode(ToADIOS2Mode(mode)),
+   name(name), adios2_openmode(ToADIOS2Mode(mode)),
    adios(std::make_shared<adios2::ADIOS>()),
    io( adios->DeclareIO(name) )
 {
@@ -60,7 +56,7 @@ adios2stream::adios2stream(const std::string &name, const openmode mode,
 adios2stream::adios2stream(const std::string &name, const openmode mode,
                            const std::string &configFile,
                            const std::string ioInConfigFile):
-   name(name), adios2openmode(ToADIOS2Mode(mode)),
+   name(name), adios2_openmode(ToADIOS2Mode(mode)),
    adios(std::make_shared<adios2::ADIOS>(configFile)),
    io( adios->DeclareIO(ioInConfigFile) )
 {
