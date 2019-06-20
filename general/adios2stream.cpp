@@ -13,6 +13,10 @@
 namespace mfem
 {
 
+const std::array<uint32_t,7> adios2stream::glvis2vtk{1, 3, 5, 8, 10, 11, 13};
+const std::vector<std::string> adios2stream::glvis_types
+{
+   "POINTS", "SEGMENT", "TRIANGLE", "SQUARE", "TETRAHEDRON", "CUBE", "PRISM"};
 //PUBLIC
 #ifdef MFEM_USE_MPI
 adios2stream::adios2stream(const std::string &name, const openmode mode,

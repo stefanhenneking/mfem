@@ -213,7 +213,8 @@ int main(int argc, char *argv[])
 
 #ifdef MFEM_USE_ADIOS2
 #ifndef MFEM_USE_MPI
-   adios2stream adios2output("refined.mesh.solution.bp", adios2stream::openmode::out);
+   adios2stream adios2output("refined.mesh.solution.bp",
+                             adios2stream::openmode::out);
    mesh->Print(adios2output);
    x.Save(adios2output);
 #endif

@@ -19,7 +19,8 @@
 #include <adios2.h>
 
 #include <string>
-#include <memory>
+#include <memory> // std::shared_ptr
+#include <array>
 #include <vector>
 
 #ifdef MFEM_USE_MPI
@@ -162,8 +163,8 @@ private:
    /** heavy object doing system-level I/O operations */
    adios2::Engine engine;
 
-   constexpr std::vector<uint32_t> glvis2vtk{1, 3, 5, 8, 10, 11, 13};
-   constexpr std::vector<std::string> glvis_types{"POINTS", "SEGMENT", "TRIANGLE", "SQUARE", "TETRAHEDRON", "CUBE", "PRISM"}
+   static const std::array<uint32_t,7> glvis2vtk;
+   static const std::vector<std::string> glvis_types;
 
    /**
     * convert openmode input to adios2::Mode format for adios2openmode placeholder
@@ -171,9 +172,6 @@ private:
     * @return adios2::Mode format
     */
    adios2::Mode ToADIOS2Mode(const openmode mode);
-
-
-
 };
 
 
