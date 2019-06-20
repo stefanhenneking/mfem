@@ -16,16 +16,21 @@
 #ifndef MFEM_ADIOS2STREAM
 #define MFEM_ADIOS2STREAM
 
-#include <adios2.h>
-
 #include <string>
 #include <memory> // std::shared_ptr
-#include <array>
-#include <vector>
+#include <map>
 
 #ifdef MFEM_USE_MPI
 #include <mpi.h>
 #endif
+
+namespace adios2{
+class ADIOS;
+class IO;
+class Engine;
+}
+
+
 
 namespace mfem
 {
@@ -85,23 +90,6 @@ public:
     */
    adios2stream(const std::string &name, const openmode mode,
                 MPI_Comm comm, const std::string engineType = "BPFile");
-
-   /**
-    * adios2stream MPI constructor, allows for passing parameters in
-    * a configuration file (run-time).
-    * @param name stream name
-    * @param mode adios2stream::openmode::in (Read), adios2stream::openmode::out (Write)
-    * @param comm MPI communicator establishing domain for fstream
-    * @param configFile adios2 xml runtime configuration (must have .xml extension)
-    *        see https://adios2.readthedocs.io/en/latest/components/components.html#runtime-configuration-files
-    * @param ioInConfigFile identifies an io field in the configFile to relate for this stream parameters
-    * @throws std::invalid_argument (user input error) or std::runtime_error
-    *         (system error)
-    */
-   adios2stream(const std::string &name, const openmode mode,
-                MPI_Comm comm, const std::string &configFile,
-                const std::string ioInConfigFile);
-
 #else
    /**
     * adios2stream Non-MPI serial constructor, allows for passing parameters in source
@@ -114,22 +102,6 @@ public:
     */
    adios2stream(const std::string &name, const openmode mode,
                 const std::string engineType = "BPFile");
-
-   /**
-    * adios2stream Non-MPI serial constructor, allows for passing parameters in
-    * a configuration file (run-time).
-    * @param name stream name
-    * @param mode adios2stream::openmode::in (Read), adios2stream::openmode::out (Write)
-    * @param configFile adios2 xml runtime configuration (must have .xml extension)
-    *        see https://adios2.readthedocs.io/en/latest/components/components.html#runtime-configuration-files
-    * @param ioInConfigFile identifies an io field in the configFile to relate for this stream parameters
-    * @throws std::invalid_argument (user input error) or std::runtime_error
-    *         (system error)
-    */
-   adios2stream(const std::string &name, const openmode mode,
-                const std::string &configFile,
-                const std::string ioInConfigFile);
-
 #endif
 
    /** using RAII components, nothing to be deallocated **/
@@ -140,7 +112,8 @@ public:
     * See https://adios2.readthedocs.io/en/latest/engines/engines.html#bp3-default
     * @param parameters map of key/value string elements
     */
-   void SetParameters(const adios2::Params& parameters = adios2::Params() );
+   void SetParameters(const std::map<std::string,std::string>& parameters =
+		   std::map<std::string,std::string>() );
 
    /**
     * Single parameter version of SetParameters passing a key/value pair
@@ -156,23 +129,16 @@ private:
    const std::string name;
 
    /** placeholder for engine openmode */
-   const adios2::Mode adios2_openmode;
+   const openmode adios2_openmode;
 
    /** main adios2 object that owns all the io and engine components */
    std::shared_ptr<adios2::ADIOS> adios;
 
    /** io object to set parameters, variables and engines */
-   adios2::IO io;
+   adios2::IO* io = nullptr;
 
    /** heavy object doing system-level I/O operations */
-   adios2::Engine engine;
-
-   /**
-    * convert openmode input to adios2::Mode format for adios2openmode placeholder
-    * @param mode input
-    * @return adios2::Mode format
-    */
-   adios2::Mode ToADIOS2Mode(const openmode mode);
+   adios2::Engine* engine = nullptr;
 };
 
 

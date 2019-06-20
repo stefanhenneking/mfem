@@ -50,6 +50,10 @@ extern "C" {
 #include "graph.h"
 #endif
 
+#ifdef MFEM_USE_ADIOS2
+#include <adios2.h>
+#endif
+
 using namespace std;
 
 namespace mfem
@@ -7972,7 +7976,7 @@ void Mesh::Print(adios2stream &out) const
 	}
 
 
-   adios2::IO& io = out.io;
+   adios2::IO& io = *out.io;
 
    io.DefineAttribute<std::string>("app", "MFEM");
    io.DefineAttribute<std::string>("glvis_mesh_version", "1.0");
@@ -8021,10 +8025,9 @@ void Mesh::Print(adios2stream &out) const
 
    io.DefineAttribute("vtk.xml", unstructuredData);
 
-   adios2::Engine& engine = out.engine;
-
    // TODO track moving mesh
-   engine = io.Open(out.name, out.adios2_openmode);
+   *out.engine = io.Open(out.name, adios2::Mode::Write);
+   adios2::Engine& engine = *out.engine;
 
    engine.BeginStep();
    out.active_step = true;

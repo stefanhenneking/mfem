@@ -300,13 +300,10 @@ endif()
 
 # ADIOS2 for I/O
 if (MFEM_USE_ADIOS2)
-   # policy to workwith targets ::
-   if(POLICY CMP0028)
-     cmake_policy(SET CMP0028 NEW)
-   endif()
    find_package(ADIOS2 REQUIRED)
-   if(MFEM_USE_MPI)
-      find_package(MPI REQUIRED)
+   if(ADIOS2_FOUND)
+     set(ADIOS2_INCLUDE_DIRS ${ADIOS2_DIR}/include)
+     set(ADIOS2_LIBRARIES ${ADIOS2_DIR}/lib)
    endif()
 endif()
 
@@ -335,7 +332,7 @@ endif()
 #    be before SuiteSparse.
 set(MFEM_TPLS MPI_CXX OPENMP BLAS LAPACK METIS HYPRE SuiteSparse SUNDIALS PETSC
     MESQUITE SuperLUDist STRUMPACK AXOM CONDUIT GECKO GNUTLS NETCDF MPFR PUMI
-    POSIXCLOCKS MFEMBacktrace ZLIB OCCA RAJA)
+    POSIXCLOCKS MFEMBacktrace ZLIB OCCA RAJA ADIOS2)
 
 # Add all *_FOUND libraries in the variable TPL_LIBRARIES.
 set(TPL_LIBRARIES "")
@@ -399,12 +396,6 @@ add_library(mfem ${SOURCES} ${HEADERS} ${MASTER_HEADERS})
 # message(STATUS "TPL_LIBRARIES = ${TPL_LIBRARIES}")
 if (CMAKE_VERSION VERSION_GREATER 2.8.11)
   target_link_libraries(mfem PUBLIC ${TPL_LIBRARIES})
-  if(MFEM_USE_ADIOS2)
-    target_link_libraries(mfem PRIVATE adios2::adios2)
-  endif()
-  if(MFEM_USE_MPI)
-    target_link_libraries(mfem PUBLIC MPI::MPI_C)
-  endif() 
 else()
   target_link_libraries(mfem ${TPL_LIBRARIES})
 endif()
