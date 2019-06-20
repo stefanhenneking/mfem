@@ -2649,6 +2649,11 @@ void GridFunction::Save(std::ostream &out) const
    out.flush();
 }
 
+void GridFunction::Save(mfem::adios2stream &out) const
+{
+
+}
+
 void GridFunction::SaveVTK(std::ostream &out, const std::string &field_name,
                            int ref)
 {

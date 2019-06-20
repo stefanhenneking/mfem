@@ -293,6 +293,9 @@ public:
        as boundary (for visualization purposes) using the mfem v1.0 format. */
    virtual void Print(std::ostream &out = mfem::out) const;
 
+   /** Print the part of the mesh in the calling processor using adios2 bp format. */
+   virtual void Print(mfem::adios2stream &out = mfem::out) const;
+
    /** Print the part of the mesh in the calling processor adding the interface
        as boundary (for visualization purposes) using Netgen/Truegrid format .*/
    virtual void PrintXG(std::ostream &out = mfem::out) const;

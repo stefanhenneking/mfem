@@ -7932,6 +7932,11 @@ void Mesh::PrintXG(std::ostream &out) const
    out << flush;
 }
 
+void Mesh::Print(mfem::adios2stream &out) const
+{
+   //TODO print sequential mesh
+}
+
 void Mesh::Printer(std::ostream &out, std::string section_delimiter) const
 {
    int i, j;

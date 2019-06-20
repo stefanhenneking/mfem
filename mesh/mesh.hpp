@@ -22,6 +22,7 @@
 #include "../fem/eltrans.hpp"
 #include "../fem/coefficient.hpp"
 #include "../general/gzstream.hpp"
+#include "../general/adios2stream.hpp"
 #include <iostream>
 
 namespace mfem
@@ -1154,6 +1155,9 @@ public:
    /// Print the mesh to the given stream using the default MFEM mesh format.
    /// \see mfem::ogzstream() for on-the-fly compression of ascii outputs
    virtual void Print(std::ostream &out = mfem::out) const { Printer(out); }
+
+   /// Print the mesh to the given stream using the adios2 bp format
+   virtual void Print(mfem::adios2stream &out) const;
 
    /// Print the mesh in VTK format (linear and quadratic meshes only).
    /// \see mfem::ogzstream() for on-the-fly compression of ascii outputs

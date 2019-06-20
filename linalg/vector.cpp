@@ -668,6 +668,13 @@ void Vector::Print(std::ostream &out, int width) const
    out << '\n';
 }
 
+void Vector::Print(mfem::adios2stream &out,
+                   const std::string variable_name) const
+{
+   // TODO verify
+   //out.engine.Put<double>(variable_name, data);
+}
+
 void Vector::Print_HYPRE(std::ostream &out) const
 {
    int i;

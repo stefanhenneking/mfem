@@ -501,6 +501,22 @@ void ParGridFunction::Save(std::ostream &out) const
    }
 }
 
+void ParGridFunction::Save(mfem::adios2stream &out) const
+{
+
+   for (int i = 0; i < size; i++)
+   {
+      if (pfes->GetDofSign(i) < 0) { data[i] = -data[i]; }
+   }
+
+   GridFunction::Save(out);
+
+   for (int i = 0; i < size; i++)
+   {
+      if (pfes->GetDofSign(i) < 0) { data[i] = -data[i]; }
+   }
+}
+
 void ParGridFunction::SaveAsOne(std::ostream &out)
 {
    int i, p;

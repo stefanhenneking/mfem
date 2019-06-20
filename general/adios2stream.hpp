@@ -28,8 +28,30 @@
 namespace mfem
 {
 
+//forward declaring friends
+class Vector;
+class FiniteElementSpace;
+class GridFunction;
+class Mesh;
+
+#ifdef MFEM_USE_MPI
+class ParGridFunction;
+class ParMesh;
+#endif
+
+
 class adios2stream
 {
+   friend class Vector;
+   friend class FiniteElementSpace;
+   friend class GridFunction;
+   friend class Mesh;
+
+#ifdef MFEM_USE_MPI
+   friend class ParGridFunction;
+   friend class ParMesh;
+#endif
+
 
 public:
 

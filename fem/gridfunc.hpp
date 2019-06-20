@@ -472,6 +472,9 @@ public:
    /// Save the GridFunction to an output stream.
    virtual void Save(std::ostream &out) const;
 
+   /// Save the GridFunction to an adios2 output stream using bp format.
+   virtual void Save(mfem::adios2stream &out) const;
+
    /** Write the GridFunction in VTK format. Note that Mesh::PrintVTK must be
        called first. The parameter ref > 0 must match the one used in
        Mesh::PrintVTK. */

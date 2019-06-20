@@ -13,6 +13,7 @@
 #define MFEM_VECTOR
 
 #include "../general/array.hpp"
+#include "../general/adios2stream.hpp"
 #include "../general/globals.hpp"
 #include "../general/mem_manager.hpp"
 #include "../general/device.hpp"
@@ -290,6 +291,11 @@ public:
 
    /// Prints vector to stream out.
    void Print(std::ostream &out = mfem::out, int width = 8) const;
+
+   /// Prints vector to stream out.
+   /// @param out adios2stream output
+   /// @param variable_name variable name associated with current Vector
+   void Print(mfem::adios2stream & out, const std::string variable_name) const;
 
    /// Prints vector to stream out in HYPRE_Vector format.
    void Print_HYPRE(std::ostream &out) const;

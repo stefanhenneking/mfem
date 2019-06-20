@@ -211,7 +211,16 @@ int main(int argc, char *argv[])
    sol_ofs.precision(8);
    x.Save(sol_ofs);
 
-   // 14. Send the solution by socket to a GLVis server.
+#ifdef MFEM_USE_ADIOS2
+#ifndef MFEM_USE_MPI
+   adios2stream adios2output("refined.mesh.solution.bp", adios2stream::openmode::out);
+   mesh->Print(adios2output);
+   x.Save(adios2output);
+#endif
+#endif
+
+   // 13. Send the solution by socket to a GLVis server.
+
    if (visualization)
    {
       char vishost[] = "localhost";
