@@ -3977,10 +3977,177 @@ void ParMesh::Print(std::ostream &out) const
    }
 }
 
+#ifdef MFEM_USE_ADIOS2
 void ParMesh::Print(adios2stream &out) const
 {
    //TODO print parallel mesh, use local arrays in adios2
+   auto lf_MapToVTKType = [](const Geometry::Type type) -> uint32_t
+   {
+      uint32_t vtkType = 0;
+      switch (type)
+      {
+         case Geometry::Type::POINT:
+            vtkType = 1;
+            break;
+         case Geometry::Type::SEGMENT:
+            vtkType = 3;
+            break;
+         case Geometry::Type::TRIANGLE:
+            vtkType = 5;
+            break;
+         case Geometry::Type::SQUARE:
+            vtkType = 8;
+            break;
+         case Geometry::Type::TETRAHEDRON:
+            vtkType = 10;
+            break;
+         case Geometry::Type::CUBE:
+            vtkType = 11;
+            break;
+         case Geometry::Type::PRISM:
+            vtkType = 13;
+            break;
+      }
+      return vtkType;
+   };
+
+   auto lf_IsConstantElementType = [&]() -> bool
+   {
+      bool isConstType = true;
+      Geometry::Type type = elements[0]->GetGeometryType();
+
+      for (auto e = 1; e < NumOfElements; ++e)
+      {
+         if (type != elements[e]->GetGeometryType())
+         {
+            isConstType = false;
+            break;
+         }
+      }
+      return isConstType;
+   };
+
+   // BODY of FUNCTION starts here
+   if (NumOfElements == 0)
+   {
+      throw std::invalid_argument(
+         "ERROR: number of elements is zero, in call to Print using "
+         "adios2stream\n");
+   }
+
+   adios2::IO &io = out.io;
+
+   io.DefineAttribute<std::string>("app", "MFEM");
+   io.DefineAttribute<std::string>("glvis_mesh_version", "1.0");
+   io.DefineAttribute<uint32_t>("dimension", Dim);
+
+   // vertices
+   adios2::Variable<uint32_t> varNumOfVertices =
+      io.DefineVariable<uint32_t>("NumOfVertices", {adios2::LocalValueDim});
+   adios2::Variable<double> varVertices = io.DefineVariable<double>(
+   "vertices", {}, {},
+   {static_cast<size_t>(NumOfVertices), static_cast<size_t>(spaceDim)});
+
+   const size_t nElementVertices =
+      static_cast<size_t>(elements[0]->GetNVertices());
+   // elements
+   const bool isConstantType = lf_IsConstantElementType();
+   const size_t nElements = static_cast<size_t>(NumOfElements);
+
+   adios2::Variable<uint32_t> varNumOfElements =
+      io.DefineVariable<uint32_t>("NumOfElements", {adios2::LocalValueDim});
+   adios2::Variable<uint32_t> varConnectivity =
+      isConstantType
+   ? io.DefineVariable<uint32_t>("connectivity", {}, {},
+   {nElements, nElementVertices})
+      :
+      // not yet supported in adios2
+      io.DefineVariable<uint32_t>("connectivity", {}, {},
+   {nElements, adios2::JoinedDim});
+
+   adios2::Variable<uint32_t> varTypes =
+      isConstantType
+      ? io.DefineVariable<uint32_t>("types")
+      : io.DefineVariable<uint32_t>("types", {}, {}, {nElements});
+   adios2::Variable<uint32_t> varOffsets =
+      isConstantType
+      ? io.DefineVariable<uint32_t>("offsets")
+      : io.DefineVariable<uint32_t>("offsets", {}, {}, {nElements});
+
+   const std::string unstructuredData = R"( <?xml version="1.0"?>
+		   <VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">
+			 <UnstructuredGrid>
+			   <Piece NumberOfPoints="NumOfVertices" NumberOfCells="NumOfElements">   
+				 <Points>
+				   <DataArray Name="vertices" NumberOfComponents="3" />
+				 </Points>
+				 <Cells>
+				   <DataArray Name="connectivity" />
+				   <DataArray Name="offsets" />
+				   <DataArray Name="types" />
+				 </Cells>
+				 <PointData>
+				   <DataArray Name="sol" />
+				 </PointData>
+			   </Piece>
+			 </UnstructuredGrid>
+		   </VTKFile>)";
+
+   io.DefineAttribute("vtk.xml", unstructuredData);
+
+   // TODO track moving mesh
+   out.engine = io.Open(out.name, adios2::Mode::Write);
+   adios2::Engine &engine = out.engine;
+
+   engine.BeginStep();
+   out.active_step = true;
+
+   engine.Put(varNumOfElements, static_cast<uint32_t>(NumOfElements));
+   engine.Put(varNumOfVertices, static_cast<uint32_t>(NumOfVertices));
+
+   if (isConstantType)
+   {
+      const uint32_t vtkType = lf_MapToVTKType(elements[0]->GetGeometryType());
+      engine.Put(varTypes, vtkType);
+
+      const uint32_t offset = static_cast<uint32_t>(elements[0]->GetNVertices());
+      engine.Put(varOffsets, offset);
+   }
+   else
+   {
+      // TODO save as arrays
+   }
+
+   // use Span to save "vertices" and "connectivity"
+   // from non-contiguous  "vertices" and "elements" arrays
+   adios2::Variable<double>::Span spanVertices = engine.Put(varVertices);
+   adios2::Variable<uint32_t>::Span spanConnectivity =
+      engine.Put(varConnectivity);
+
+   // vertices
+   for (int v = 0; v < NumOfVertices; ++v)
+   {
+      for (int coord = 0; coord < spaceDim; ++coord)
+      {
+         spanVertices[v * spaceDim + coord] = vertices[v](coord);
+      }
+   }
+   // connectivity
+   for (int e = 0; e < NumOfElements; ++e)
+   {
+      const int nVertices = elements[e]->GetNVertices();
+      for (int v = 0; v < nVertices; ++v)
+      {
+         spanConnectivity[e * nVertices + v] = elements[e]->GetVertices()[v];
+      }
+   }
+
+   // collect spans and mesh Puts
+   engine.PerformPuts();
+   engine.EndStep(); //TODO remove
+   engine.Close();
 }
+#endif
 
 static void dump_element(const Element* elem, Array<int> &data)
 {

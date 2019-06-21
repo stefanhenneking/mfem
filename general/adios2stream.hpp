@@ -16,6 +16,9 @@
 #ifndef MFEM_ADIOS2STREAM
 #define MFEM_ADIOS2STREAM
 
+
+#include "../config/config.hpp"
+
 #include <map>
 #include <memory>  // std::shared_ptr
 #include <string>
@@ -26,7 +29,8 @@
 
 #include <adios2.h>
 
-namespace mfem {
+namespace mfem
+{
 
 // forward declaring friends
 class Vector;
@@ -39,97 +43,98 @@ class ParGridFunction;
 class ParMesh;
 #endif
 
-class adios2stream {
-  friend class Vector;
-  friend class FiniteElementSpace;
-  friend class GridFunction;
-  friend class Mesh;
+class adios2stream
+{
+   friend class Vector;
+   friend class FiniteElementSpace;
+   friend class GridFunction;
+   friend class Mesh;
 
 #ifdef MFEM_USE_MPI
-  friend class ParGridFunction;
-  friend class ParMesh;
+   friend class ParGridFunction;
+   friend class ParMesh;
 #endif
 
- public:
-  /** true : engine step is active after engine.BeginStep(),
-   *  false: inactive after engine.EndStep() */
-  bool active_step = false;
+public:
+   /** true : engine step is active after engine.BeginStep(),
+    *  false: inactive after engine.EndStep() */
+   bool active_step = false;
 
-  /**
-   * Open modes for adios2stream (from fstream)
-   * out: write
-   * in:  read
-   * app: append
-   */
-  enum class openmode { out, in, app };
+   /**
+    * Open modes for adios2stream (from fstream)
+    * out: write
+    * in:  read
+    * app: append
+    */
+   enum class openmode { out, in, app };
 
 #ifdef MFEM_USE_MPI
 
-  /**
-   * adios2stream MPI constructor, allows for passing parameters in source
-   * code (compile-time) only.
-   * @param name stream name
-   * @param mode adios2stream::openmode::in (Read), adios2stream::openmode::out
-   * (Write)
-   * @param comm MPI communicator establishing domain for fstream
-   * @param engineType available adios2 engine, default is BP3 file
-   *        see https://adios2.readthedocs.io/en/latest/engines/engines.html
-   * @throws std::invalid_argument (user input error) or std::runtime_error
-   *         (system error)
-   */
-  adios2stream(const std::string& name, const openmode mode, MPI_Comm comm,
-               const std::string engineType = "BPFile");
+   /**
+    * adios2stream MPI constructor, allows for passing parameters in source
+    * code (compile-time) only.
+    * @param name stream name
+    * @param mode adios2stream::openmode::in (Read), adios2stream::openmode::out
+    * (Write)
+    * @param comm MPI communicator establishing domain for fstream
+    * @param engineType available adios2 engine, default is BP3 file
+    *        see https://adios2.readthedocs.io/en/latest/engines/engines.html
+    * @throws std::invalid_argument (user input error) or std::runtime_error
+    *         (system error)
+    */
+   adios2stream(const std::string& name, const openmode mode, MPI_Comm comm,
+                const std::string engineType = "BPFile");
 #else
-  /**
-   * adios2stream Non-MPI serial constructor, allows for passing parameters in
-   * source code (compile-time) only.
-   * @param name stream name
-   * @param mode adios2stream::openmode::in (Read), adios2stream::openmode::out
-   * (Write)
-   * @param engineType available adios2 engine, default is BP3 file
-   * @throws std::invalid_argument (user input error) or std::runtime_error
-   *         (system error)
-   */
-  adios2stream(const std::string& name, const openmode mode,
-               const std::string engineType = "BPFile");
+   /**
+    * adios2stream Non-MPI serial constructor, allows for passing parameters in
+    * source code (compile-time) only.
+    * @param name stream name
+    * @param mode adios2stream::openmode::in (Read), adios2stream::openmode::out
+    * (Write)
+    * @param engineType available adios2 engine, default is BP3 file
+    * @throws std::invalid_argument (user input error) or std::runtime_error
+    *         (system error)
+    */
+   adios2stream(const std::string& name, const openmode mode,
+                const std::string engineType = "BPFile");
 #endif
 
-  /** using RAII components, nothing to be deallocated **/
-  virtual ~adios2stream() = default;
+   /** using RAII components, nothing to be deallocated **/
+   virtual ~adios2stream() = default;
 
-  /**
-   * Set parameters for a particular adios2stream Engine
-   * See
-   * https://adios2.readthedocs.io/en/latest/engines/engines.html#bp3-default
-   * @param parameters map of key/value string elements
-   */
-  void SetParameters(const std::map<std::string, std::string>& parameters =
+   /**
+    * Set parameters for a particular adios2stream Engine
+    * See
+    * https://adios2.readthedocs.io/en/latest/engines/engines.html#bp3-default
+    * @param parameters map of key/value string elements
+    */
+   void SetParameters(const std::map<std::string, std::string>& parameters =
                          std::map<std::string, std::string>());
 
-  /**
-   * Single parameter version of SetParameters passing a key/value pair
-   * See
-   * https://adios2.readthedocs.io/en/latest/engines/engines.html#bp3-default
-   * @param key input parameter key
-   * @param value input parameter value
-   */
-  void SetParameter(const std::string key, const std::string value);
+   /**
+    * Single parameter version of SetParameters passing a key/value pair
+    * See
+    * https://adios2.readthedocs.io/en/latest/engines/engines.html#bp3-default
+    * @param key input parameter key
+    * @param value input parameter value
+    */
+   void SetParameter(const std::string key, const std::string value);
 
- private:
-  /** placeholder for engine name */
-  const std::string name;
+private:
+   /** placeholder for engine name */
+   const std::string name;
 
-  /** placeholder for engine openmode */
-  const openmode adios2_openmode;
+   /** placeholder for engine openmode */
+   const openmode adios2_openmode;
 
-  /** main adios2 object that owns all the io and engine components */
-  std::shared_ptr<adios2::ADIOS> adios;
+   /** main adios2 object that owns all the io and engine components */
+   std::shared_ptr<adios2::ADIOS> adios;
 
-  /** io object to set parameters, variables and engines */
-  adios2::IO io;
+   /** io object to set parameters, variables and engines */
+   adios2::IO io;
 
-  /** heavy object doing system-level I/O operations */
-  adios2::Engine engine;
+   /** heavy object doing system-level I/O operations */
+   adios2::Engine engine;
 };
 
 }  // end namespace mfem

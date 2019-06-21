@@ -240,19 +240,19 @@ int main(int argc, char *argv[])
       x.Save(sol_ofs);
 
 #ifdef MFEM_USE_ADIOS2
-
-      adios2stream adios2output("refined.mesh.solution.bp",
+      std::cout << "Using ADIOS2\n";
+      adios2stream adios2output("refined_mesh_solution.bp",
                                 adios2stream::openmode::out, MPI_COMM_WORLD, "BPFile");
       // Commented out optional constructor for allowing adios2 runtime parameters (see below SetParameter)
       // adios2stream adios2output("refined.mesh.solution.bp", adios2stream::openmode::out, MPI_COMM_WORLD, "adios2_config.xml", "ex1p");
 
       //optimization parameters for running at scale, we can make them
-      const int procs2FilesRatio = 2;
-      adios2output.SetParameter("substreams",
-                                std::to_string(num_procs/procs2FilesRatio ));
-      adios2output.SetParameter("CollectiveMetadata", "Off");
+      //      const int procs2FilesRatio = 2;
+      //      adios2output.SetParameter("substreams",
+      //                                std::to_string(num_procs/procs2FilesRatio ));
+      //adios2output.SetParameter("CollectiveMetadata", "Off");
       //in a transient problem with a fixed mesh, this is only needed once
-      mesh->Print(adios2output);
+      pmesh->Print(adios2output);
       //in a transient problem with a fixed mesh, we save in "steps"
       x.Save(adios2output);
 #endif
