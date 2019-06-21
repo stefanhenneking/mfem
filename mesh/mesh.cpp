@@ -8204,6 +8204,9 @@ void Mesh::Print(adios2stream &out) const
       ? io.DefineVariable<uint32_t>("offsets")
       : io.DefineVariable<uint32_t>("offsets", {}, {}, {nElements});
 
+   //solution
+   io.DefineVariable<double>("sol", {}, {}, {static_cast<size_t>(NumOfVertices)});
+
    const std::string unstructuredData = R"( <?xml version="1.0"?>
 	   <VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">
 		 <UnstructuredGrid>
@@ -8274,8 +8277,6 @@ void Mesh::Print(adios2stream &out) const
 
    // collect spans and mesh Puts
    engine.PerformPuts();
-   engine.EndStep(); //TODO remove
-   engine.Close();
 }
 #endif
 

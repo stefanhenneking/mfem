@@ -501,6 +501,7 @@ void ParGridFunction::Save(std::ostream &out) const
    }
 }
 
+#ifdef MFEM_USE_ADIOS2
 void ParGridFunction::Save(adios2stream &out) const
 {
    double *data_  = const_cast<double*>(HostRead());
@@ -516,6 +517,7 @@ void ParGridFunction::Save(adios2stream &out) const
       if (pfes->GetDofSign(i) < 0) { data_[i] = -data_[i]; }
    }
 }
+#endif
 
 void ParGridFunction::SaveAsOne(std::ostream &out)
 {

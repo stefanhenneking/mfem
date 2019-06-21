@@ -67,6 +67,15 @@ adios2stream::adios2stream(const std::string& name, const openmode mode,
 }
 #endif
 
+
+adios2stream::~adios2stream()
+{
+	if(engine){
+		engine.Close();
+	}
+}
+
+
 void adios2stream::SetParameters(
    const std::map<std::string, std::string>& parameters)
 {

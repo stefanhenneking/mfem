@@ -13,7 +13,9 @@
 #define MFEM_VECTOR
 
 #include "../general/array.hpp"
+#ifdef MFEM_USE_ADIOS2
 #include "../general/adios2stream.hpp"
+#endif
 #include "../general/globals.hpp"
 #include "../general/mem_manager.hpp"
 #include "../general/device.hpp"

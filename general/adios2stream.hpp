@@ -100,7 +100,7 @@ public:
 #endif
 
    /** using RAII components, nothing to be deallocated **/
-   virtual ~adios2stream() = default;
+   virtual ~adios2stream();
 
    /**
     * Set parameters for a particular adios2stream Engine

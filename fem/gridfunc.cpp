@@ -2649,10 +2649,15 @@ void GridFunction::Save(std::ostream &out) const
    out.flush();
 }
 
+#ifdef MFEM_USE_ADIOS2
 void GridFunction::Save(adios2stream &out) const
 {
-
+	if (fes->GetOrdering() == Ordering::byNODES)
+	{
+		Vector::Print(out, "sol");
+	}
 }
+#endif
 
 void GridFunction::SaveVTK(std::ostream &out, const std::string &field_name,
                            int ref)
