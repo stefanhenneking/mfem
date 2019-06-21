@@ -301,10 +301,6 @@ endif()
 # ADIOS2 for I/O
 if (MFEM_USE_ADIOS2)
    find_package(ADIOS2 REQUIRED)
-   if(ADIOS2_FOUND)
-     set(ADIOS2_INCLUDE_DIRS ${ADIOS2_DIR}/include)
-     set(ADIOS2_LIBRARIES ${ADIOS2_DIR}/lib)
-   endif()
 endif()
 
 # MFEM_TIMER_TYPE
