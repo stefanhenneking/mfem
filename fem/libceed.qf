@@ -13,7 +13,10 @@
 struct BuildContext { CeedInt dim, space_dim; CeedScalar coeff; };
 
 /// libCEED Q-function for building quadrature data for a diffusion operator
-inline __device__ void f_build_diff_const(void *ctx, const CeedInt Q, const CeedScalar *J, const CeedScalar *qw, CeedScalar *qd) {
+inline __device__ void f_build_diff_const(void *ctx, const CeedInt Q, const CeedScalar** in, CeedScalar** out) {
+  const CeedScalar *J = in[0];
+  const CeedScalar *qw = in[1];
+  CeedScalar *qd = out[0];
   BuildContext *bc = (BuildContext*)ctx;
   // in[0] is Jacobians with shape [dim, nc=dim, Q]
   // in[1] is quadrature weights, size (Q)
@@ -142,7 +145,10 @@ inline __device__ void f_build_diff_grid(void *ctx, const CeedInt Q, const CeedS
 
 
 /// libCEED Q-function for applying a diffusion operator
-inline __device__ void f_apply_diff(void *ctx, const CeedInt Q, const CeedScalar *ug, const CeedScalar *qd, CeedScalar *vg) {
+inline __device__ void f_apply_diff(void *ctx, const CeedInt Q, const CeedScalar** in, CeedScalar** out) {
+  const CeedScalar *ug = in[0];
+  const CeedScalar *qd = in[1];
+  CeedScalar *vg = out[0];
   BuildContext *bc = (BuildContext*)ctx;
   // in[0], out[0] have shape [dim, nc=1, Q]
   switch (bc->dim) {
@@ -174,14 +180,20 @@ inline __device__ void f_apply_diff(void *ctx, const CeedInt Q, const CeedScalar
   }
 }
 
-inline __device__ void f_apply_diff_1d(void *ctx, const CeedInt Q, const CeedScalar *ug, const CeedScalar *qd, CeedScalar *vg) {
+inline __device__ void f_apply_diff_1d(void *ctx, const CeedInt Q, const CeedScalar** in, CeedScalar** out) {
+  const CeedScalar *ug = in[0];
+  const CeedScalar *qd = in[1];
+  CeedScalar *vg = out[0];
   // in[0], out[0] have shape [dim, nc=1, Q]
   for (CeedInt i = 0; i < Q; ++i) {
     vg[i] = ug[i] * qd[i];
   }
 }
 
-inline __device__ void f_apply_diff_2d(void *ctx, const CeedInt Q, const CeedScalar *ug, const CeedScalar *qd, CeedScalar *vg) {
+inline __device__ void f_apply_diff_2d(void *ctx, const CeedInt Q, const CeedScalar** in, CeedScalar** out) {
+  const CeedScalar *ug = in[0];
+  const CeedScalar *qd = in[1];
+  CeedScalar *vg = out[0];
   // in[0], out[0] have shape [dim, nc=1, Q]
   for (CeedInt i = 0; i < Q; ++i) {
     const CeedScalar ug0 = ug[i+Q*0];
@@ -191,7 +203,10 @@ inline __device__ void f_apply_diff_2d(void *ctx, const CeedInt Q, const CeedSca
   }
 }
 
-inline __device__ void f_apply_diff_3d(void *ctx, const CeedInt Q, const CeedScalar *ug, const CeedScalar *qd, CeedScalar *vg) {
+inline __device__ void f_apply_diff_3d(void *ctx, const CeedInt Q, const CeedScalar** in, CeedScalar** out) {
+  const CeedScalar *ug = in[0];
+  const CeedScalar *qd = in[1];
+  CeedScalar *vg = out[0];
   // in[0], out[0] have shape [dim, nc=1, Q]
   for (CeedInt i = 0; i < Q; ++i) {
     const CeedScalar ug0 = ug[i+Q*0];
