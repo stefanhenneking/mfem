@@ -65,15 +65,29 @@ double weight_fun(const Vector &x);
 
 double ind_values(const Vector &x)
 {
-   const int opt = 0;
+   const int opt = -2;
    const double small = 0.001, big = 0.01;
+
+
+   if (opt == -2)
+   {
+     const double X = x(0), Y = x(1);
+     return std::sin(2*M_PI*X)*std::cos(2*M_PI*Y);
+   }
+
+   if (opt == -1)
+   {
+      const double X = x(0), Y = x(1);
+      //const double ind = std::sin(10*X);
+      const double ind = std::sin(X*(2*M_PI))+std::sin(Y*(2*M_PI));
+      return ind;
+   }
 
    if (opt == 0)
    {
-      const double X = x(0), slope = 50.0;
-      const double ind = std::tanh(slope * (X - 0.45)) -
-                         std::tanh(slope * (X - 0.55));
-
+      const double X = x(0), Y = x(1), slope = 10.0;
+      const double ind = (std::tanh(slope * (X - 0.45)) -
+                         std::tanh(slope * (X - 0.55)));
       return ind;
    }
 
@@ -197,28 +211,88 @@ public:
    {
       Vector pos(3);
       T.Transform(ip, pos);
-
-      if (type == 0)
+      switch(type)
       {
-         K(0, 0) = 1.0 + 3.0 * std::sin(M_PI*pos(0));
-         K(0, 1) = 0.0;
-         K(1, 0) = 0.0;
-         K(1, 1) = 1.0;
-      }
-      else
-      {
-         const double xc = pos(0) - 0.5, yc = pos(1) - 0.5;
-         const double r = sqrt(xc*xc + yc*yc);
-         double r1 = 0.15; double r2 = 0.35; double sf=30.0;
-         const double eps = 0.5;
+         case -2:
+         {
+               const double X = pos(0), Y = pos(1);
+               double fx = std::abs(std::cos(2*M_PI*X)*std::cos(2*M_PI*Y));
+               double fxx = std::abs(std::sin(2*M_PI*X)*std::cos(2*M_PI*Y));
+               
+               double fy = std::abs(std::sin(2*M_PI*X)*std::sin(2*M_PI*Y));
+               double fyy = std::abs(std::sin(2*M_PI*X)*std::cos(2*M_PI*Y));
+               
+                const double p = 2;
+                //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fxx));
+                //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fyy));
+                double size = 1.0/(1+std::exp(fxx-std::pow(p,2)+p+1));
+                double size2 = 1.0/(1+std::exp(fyy-std::pow(p,2)+p+1));
+                K(0, 0) = size;
+                K(0, 1) = 0.0;
+                K(1, 0) = 0.0;
+                K(1, 1) = size2;
+                break;
+         }
+         case -1:
+         { 
+                const double X = pos(0), Y = pos(1);
+                double fx = std::abs(std::cos(X*(M_PI*2)));
+                double fxx = std::abs(std::sin(X*(M_PI*2)));
+                
+                double fy = std::abs(std::cos(Y*(M_PI*2)));
+                double fyy = std::abs(std::sin(Y*(M_PI*2)));
 
-         const double tan1 = std::tanh(sf*(r-r1)),
-                      tan2 = std::tanh(sf*(r-r2));
+                const double p = 2;
+                
+                double size = 1.0/(1+std::exp(fxx-std::pow(p-1,2)));
+                double size2 = 1.0/(1+std::exp(fyy-std::pow(p-1,2)));
 
-         K(0, 0) = eps + 1.0 * (tan1 - tan2);
-         K(0, 1) = 0.0;
-         K(1, 0) = 0.0;
-         K(1, 1) = 1.0;
+                K(0, 0) = size;
+                K(0, 1) = 0.0;
+                K(1, 0) = 0.0;
+                K(1, 1) = size2;
+                break;
+         }
+         case 0:
+         { 
+                const double X = pos(0), Y = pos(1);
+                const double sec1 = 1.0/std::cosh(10*(X-0.45)), sec2 = 1.0/std::cosh(10*(X-0.55));
+                const double fx = 10*(sec1*sec1-sec2*sec2);
+                const double fxx = (((std::tanh(10*(X-0.45))*sec1*sec1-std::tanh(10*(X-0.55))*sec2*sec2)));
+                const double fy = -1.0;
+                const double curv = ((fxx)/std::pow((fx*fx)+1, 1.5));
+                
+                const double p = 3;
+                
+                double size = 1.0/(1+std::exp(fxx-std::pow(p,2)+p+1));
+                
+                
+                //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fxx));
+                //double size2 = 1.0/(1+std::exp(fyy-6+1));
+
+                K(0, 0) = size;
+                K(0, 1) = 0.0;
+                K(1, 0) = 0.0;
+                K(1, 1) = 1.0;
+                break;
+         }
+         
+         default:
+         {
+                const double xc = pos(0) - 0.5, yc = pos(1) - 0.5;
+                const double r = sqrt(xc*xc + yc*yc);
+                double r1 = 0.15; double r2 = 0.35; double sf=30.0;
+                const double eps = 0.5;
+
+                const double tan1 = std::tanh(sf*(r-r1)),
+                        tan2 = std::tanh(sf*(r-r2));
+
+                K(0, 0) = eps + 1.0 * (tan1 - tan2);
+                K(0, 1) = 0.0;
+                K(1, 0) = 0.0;
+                K(1, 1) = 1.0;
+                break;
+         }
       }
    }
 };
@@ -241,7 +315,7 @@ int main (int argc, char *argv[])
    int quad_type         = 1;
    int quad_order        = 8;
    int newton_iter       = 10;
-   double newton_rtol    = 1e-12;
+   double newton_rtol    = 1e-6;
    int lin_solver        = 2;
    int max_lin_iter      = 100;
    bool move_bnd         = true;
@@ -451,9 +525,10 @@ int main (int argc, char *argv[])
    TargetConstructor::TargetType target_t;
    TargetConstructor *target_c = NULL;
    HessianCoefficient *adapt_coeff = NULL;
-   H1_FECollection ind_fec(3, dim);
+   H1_FECollection ind_fec(mesh_poly_deg, dim);
    FiniteElementSpace ind_fes(mesh, &ind_fec);
    GridFunction size;
+   double error = 0.0;
    switch (target_id)
    {
       case 1: target_t = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE; break;
@@ -467,7 +542,10 @@ int main (int argc, char *argv[])
          size.SetSpace(&ind_fes);
          FunctionCoefficient ind_coeff(ind_values);
          size.ProjectCoefficient(ind_coeff);
-         std::cout << "L1 Error: " << size.ComputeL1Error(ind_coeff) << std::endl;
+         error = size.ComputeL1Error(ind_coeff);
+         
+         
+        
          if (visualization)
          {
             osockstream sock(19916, "localhost");
@@ -477,11 +555,11 @@ int main (int argc, char *argv[])
             sock.send();
             sock << "window_title 'Adaptivity Function'\n"
                  << "window_geometry "
-                 << 0 << " " << 600 << " " << 600 << " " << 600 << "\n"
+                 << 0 << " " << 400 << " " << 400 << " " << 400 << "\n"
                  << "keys jRmclA" << endl;
          }
 
-         adapt_coeff = new HessianCoefficient(dim, 1);
+         adapt_coeff = new HessianCoefficient(dim, -2);
          tc->SetAnalyticTargetSpec(NULL, NULL, adapt_coeff);
          target_c = tc;
          break;
@@ -571,7 +649,7 @@ int main (int argc, char *argv[])
    else { a.AddDomainIntegrator(he_nlf_integ); }
 
    const double init_energy = a.GetGridFunctionEnergy(x);
-
+   //MFEM_ABORT("");
    // 15. Visualize the starting mesh and metric values.
    if (visualization)
    {
@@ -714,6 +792,13 @@ int main (int argc, char *argv[])
    }
    delete newton;
 
+   GridFunction c2;
+   c2.SetSpace(&ind_fes);
+   FunctionCoefficient ind_coeff(ind_values);
+   c2.ProjectCoefficient(ind_coeff);
+   std::cout << "L1 Error Before: " << error << std::endl;
+   std::cout << "L1 Error After:  " << c2.ComputeL1Error(ind_coeff) << std::endl;
+
    // 20. Save the optimized mesh to a file. This output can be viewed later
    //     using GLVis: "glvis -m optimized.mesh".
    {
@@ -744,7 +829,7 @@ int main (int argc, char *argv[])
    if (visualization)
    {
       char title[] = "Final metric values";
-      vis_tmop_metric_s(mesh_poly_deg, *metric, *target_c, *mesh, title, 600);
+      vis_tmop_metric_s(mesh_poly_deg, *metric, *target_c, *mesh, title, 400);
    }
 
    // 23. Visualize the mesh displacement.
@@ -758,7 +843,7 @@ int main (int argc, char *argv[])
       sock.send();
       sock << "window_title 'Displacements'\n"
            << "window_geometry "
-           << 1200 << " " << 0 << " " << 600 << " " << 600 << "\n"
+           << 800 << " " << 0 << " " << 400 << " " << 400 << "\n"
            << "keys jRmclA" << endl;
    }
 
