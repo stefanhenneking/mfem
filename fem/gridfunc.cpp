@@ -2652,10 +2652,23 @@ void GridFunction::Save(std::ostream &out) const
 #ifdef MFEM_USE_ADIOS2
 void GridFunction::Save(adios2stream &out) const
 {
-	if (fes->GetOrdering() == Ordering::byNODES)
-	{
-		Vector::Print(out, "sol");
-	}
+    auto var = out.io.InquireVariable<double>("sol");
+    if(!var)
+    {
+        const size_t components = static_cast<size_t>(fes->GetVDim());
+        const size_t nodes = size /components;
+
+        if (fes->GetOrdering() == Ordering::byNODES)
+        {
+          out.io.DefineVariable<double>("sol", {}, {}, {nodes} );
+        }
+        else
+        {
+          out.io.DefineVariable<double>("sol", {}, {}, {nodes, components} );
+        }
+
+    }
+    Vector::Print(out, "sol");
 }
 #endif
 

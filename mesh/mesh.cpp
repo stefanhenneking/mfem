@@ -8189,7 +8189,7 @@ void Mesh::Print(adios2stream &out) const
    adios2::Variable<uint32_t> varConnectivity =
       isConstantType
    ? io.DefineVariable<uint32_t>("connectivity", {}, {},
-   {nElements, nElementVertices})
+   {nElements, nElementVertices+1})
       :
       // not yet supported in adios2
       io.DefineVariable<uint32_t>("connectivity", {}, {},
@@ -8199,24 +8199,19 @@ void Mesh::Print(adios2stream &out) const
       isConstantType
       ? io.DefineVariable<uint32_t>("types")
       : io.DefineVariable<uint32_t>("types", {}, {}, {nElements});
-   adios2::Variable<uint32_t> varOffsets =
-      isConstantType
-      ? io.DefineVariable<uint32_t>("offsets")
-      : io.DefineVariable<uint32_t>("offsets", {}, {}, {nElements});
 
    //solution
-   io.DefineVariable<double>("sol", {}, {}, {static_cast<size_t>(NumOfVertices)});
+   //io.DefineVariable<double>("sol", {}, {}, {static_cast<size_t>(NumOfVertices)});
 
    const std::string unstructuredData = R"( <?xml version="1.0"?>
 	   <VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">
 		 <UnstructuredGrid>
 		   <Piece NumberOfPoints="NumOfVertices" NumberOfCells="NumOfElements">   
 			 <Points>
-			   <DataArray Name="vertices" NumberOfComponents="3" />
+			   <DataArray Name="vertices" />
 			 </Points>
 			 <Cells>
 			   <DataArray Name="connectivity" />
-			   <DataArray Name="offsets" />
 			   <DataArray Name="types" />
 			 </Cells>
 			 <PointData>
@@ -8232,9 +8227,6 @@ void Mesh::Print(adios2stream &out) const
    out.engine = io.Open(out.name, adios2::Mode::Write);
    adios2::Engine &engine = out.engine;
 
-   engine.BeginStep();
-   out.active_step = true;
-
    engine.Put(varNumOfElements, static_cast<uint32_t>(NumOfElements));
    engine.Put(varNumOfVertices, static_cast<uint32_t>(NumOfVertices));
 
@@ -8242,9 +8234,6 @@ void Mesh::Print(adios2stream &out) const
    {
       const uint32_t vtkType = lf_MapToVTKType(elements[0]->GetGeometryType());
       engine.Put(varTypes, vtkType);
-
-      const uint32_t offset = static_cast<uint32_t>(elements[0]->GetNVertices());
-      engine.Put(varOffsets, offset);
    }
    else
    {
@@ -8262,17 +8251,20 @@ void Mesh::Print(adios2stream &out) const
    {
       for (int coord = 0; coord < spaceDim; ++coord)
       {
-         spanVertices[v * spaceDim + coord] = vertices[v](coord);
+         spanVertices[v * spaceDim + coord ] = vertices[v](coord);
       }
    }
    // connectivity
+   size_t elementPosition = 0;
    for (int e = 0; e < NumOfElements; ++e)
    {
       const int nVertices = elements[e]->GetNVertices();
+      spanConnectivity[elementPosition] = nVertices;
       for (int v = 0; v < nVertices; ++v)
       {
-         spanConnectivity[e * nVertices + v] = elements[e]->GetVertices()[v];
+         spanConnectivity[elementPosition + v + 1] = elements[e]->GetVertices()[v];
       }
+      elementPosition += nVertices + 1;
    }
 
    // collect spans and mesh Puts

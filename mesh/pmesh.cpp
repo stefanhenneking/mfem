@@ -4056,42 +4056,41 @@ void ParMesh::Print(adios2stream &out) const
 
    adios2::Variable<uint32_t> varNumOfElements =
       io.DefineVariable<uint32_t>("NumOfElements", {adios2::LocalValueDim});
-   adios2::Variable<uint32_t> varConnectivity =
+
+   adios2::Variable<uint64_t> varConnectivity =
       isConstantType
-   ? io.DefineVariable<uint32_t>("connectivity", {}, {},
-   {nElements, nElementVertices})
+   ? io.DefineVariable<uint64_t>("connectivity", {}, {},
+   {nElements, nElementVertices+1})
       :
       // not yet supported in adios2
-      io.DefineVariable<uint32_t>("connectivity", {}, {},
+      io.DefineVariable<uint64_t>("connectivity", {}, {},
    {nElements, adios2::JoinedDim});
 
    adios2::Variable<uint32_t> varTypes =
       isConstantType
       ? io.DefineVariable<uint32_t>("types")
       : io.DefineVariable<uint32_t>("types", {}, {}, {nElements});
-   adios2::Variable<uint32_t> varOffsets =
-      isConstantType
-      ? io.DefineVariable<uint32_t>("offsets")
-      : io.DefineVariable<uint32_t>("offsets", {}, {}, {nElements});
+
+   //solution
+   //io.DefineVariable<double>("sol", {}, {}, {static_cast<size_t>(NumOfVertices), static_cast<size_t>(Dim)});
 
    const std::string unstructuredData = R"( <?xml version="1.0"?>
-		   <VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">
-			 <UnstructuredGrid>
-			   <Piece NumberOfPoints="NumOfVertices" NumberOfCells="NumOfElements">   
-				 <Points>
-				   <DataArray Name="vertices" NumberOfComponents="3" />
-				 </Points>
-				 <Cells>
-				   <DataArray Name="connectivity" />
-				   <DataArray Name="offsets" />
-				   <DataArray Name="types" />
-				 </Cells>
-				 <PointData>
-				   <DataArray Name="sol" />
-				 </PointData>
-			   </Piece>
-			 </UnstructuredGrid>
-		   </VTKFile>)";
+           <VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">
+             <UnstructuredGrid>
+               <Piece NumberOfPoints="NumOfVertices" NumberOfCells="NumOfElements">   
+                 <Points>
+                   <DataArray Name="vertices" />
+                 </Points>
+                 <Cells>
+                   <DataArray Name="connectivity" />
+                   <DataArray Name="types" />
+                 </Cells>
+                 <PointData>
+                   <DataArray Name="sol" />
+                 </PointData>
+               </Piece>
+             </UnstructuredGrid>
+           </VTKFile>)";
 
    io.DefineAttribute("vtk.xml", unstructuredData);
 
@@ -4099,7 +4098,7 @@ void ParMesh::Print(adios2stream &out) const
    out.engine = io.Open(out.name, adios2::Mode::Write);
    adios2::Engine &engine = out.engine;
 
-   engine.BeginStep();
+   //engine.BeginStep();
    out.active_step = true;
 
    engine.Put(varNumOfElements, static_cast<uint32_t>(NumOfElements));
@@ -4109,9 +4108,6 @@ void ParMesh::Print(adios2stream &out) const
    {
       const uint32_t vtkType = lf_MapToVTKType(elements[0]->GetGeometryType());
       engine.Put(varTypes, vtkType);
-
-      const uint32_t offset = static_cast<uint32_t>(elements[0]->GetNVertices());
-      engine.Put(varOffsets, offset);
    }
    else
    {
@@ -4121,7 +4117,7 @@ void ParMesh::Print(adios2stream &out) const
    // use Span to save "vertices" and "connectivity"
    // from non-contiguous  "vertices" and "elements" arrays
    adios2::Variable<double>::Span spanVertices = engine.Put(varVertices);
-   adios2::Variable<uint32_t>::Span spanConnectivity =
+   adios2::Variable<uint64_t>::Span spanConnectivity =
       engine.Put(varConnectivity);
 
    // vertices
@@ -4133,19 +4129,21 @@ void ParMesh::Print(adios2stream &out) const
       }
    }
    // connectivity
+   size_t elementPosition = 0;
    for (int e = 0; e < NumOfElements; ++e)
    {
       const int nVertices = elements[e]->GetNVertices();
+      spanConnectivity[elementPosition] = nVertices;
       for (int v = 0; v < nVertices; ++v)
       {
-         spanConnectivity[e * nVertices + v] = elements[e]->GetVertices()[v];
+         spanConnectivity[elementPosition + v + 1] = elements[e]->GetVertices()[v];
       }
+      elementPosition += nVertices + 1;
    }
 
    // collect spans and mesh Puts
    engine.PerformPuts();
-   engine.EndStep(); //TODO remove
-   engine.Close();
+   //engine.EndStep(); //TODO remove
 }
 #endif
 
