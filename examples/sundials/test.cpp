@@ -51,16 +51,33 @@ class RobertsSUNDIALS : public TimeDependentAdjointOperator
 public:
   RobertsSUNDIALS(int dim, Vector p) :
     TimeDependentAdjointOperator(dim),
-    p_(p) {}
+    p_(p),
+    adjointMatrix(NULL)
+  {}
 
   virtual void Mult(const Vector &x, Vector &y) const;
   virtual void QuadratureIntegration(const Vector &x, Vector &y) const;
   virtual void AdjointRateMult(const Vector &y, Vector &yB, Vector &yBdot) const;
   virtual void ObjectiveSensitivityMult(const Vector &y, const Vector &yB, Vector &qbdot) const;
+  virtual int ImplicitSetupB(const double t, const Vector &y, const Vector &yB,
+			     const Vector &fyB, int jokB, int *jcurB, double gammaB);
+  virtual int ImplicitSolveB(Vector &x, const Vector &b, double tol);
 
+  ~RobertsSUNDIALS() {
+    delete adjointMatrix;
+  }
+
+  class RobertsOperator : Operator
+  {
+    
+  };
   
 protected:
   Vector p_;
+
+  // Solvers
+  GMRESSolver adjointSolver;  
+  SparseMatrix* adjointMatrix;
 };
 
 
@@ -259,7 +276,8 @@ int main(int argc, char *argv[])
      t = t_final;
      cvodes->InitB(adv, t, w);
      cvodes->InitQuadIntegrationB(1.e-6, 1.e-6);
-
+     cvodes->SetLinearSolverB();
+     
      // Results at time TBout1
      double dt_real = max(dt, t - TBout1);
      cvodes->StepB(w, t, dt_real);
@@ -307,7 +325,7 @@ void RobertsSUNDIALS::QuadratureIntegration(const Vector &y, Vector &qdot) const
   qdot[0] = y[2];
 }
 
-
+// fB
 void RobertsSUNDIALS::AdjointRateMult(const Vector &y, Vector & yB, Vector &yBdot) const
 {
   double l21 = (yB[1]-yB[0]);
@@ -331,3 +349,41 @@ void RobertsSUNDIALS::ObjectiveSensitivityMult(const Vector &y, const Vector &yB
   qBdot[2] = y[1]*y[1]*l32;
 }
 
+int RobertsSUNDIALS::ImplicitSetupB(const double t, const Vector &y, const Vector &yB,
+				    const Vector &fyB, int jokB, int *jcurB, double gammaB)
+{
+
+  // M = I- gamma J
+  // J = dfB/dyB
+  // fB
+  // Let's create a SparseMatrix and fill in the entries since this example doesn't contain finite elements
+  cout << "t: " << t << " " << gammaB << endl;
+  
+  delete adjointMatrix;
+  adjointMatrix = new SparseMatrix(y.Size(), yB.Size());
+  for (int j = 0; j < y.Size(); j++)
+    {
+      Vector JacBj(yB.Size());
+      Vector yBone(yB.Size());
+      yBone[j] = 1.;
+      AdjointRateMult(y, yBone, JacBj);
+      for (int i = 0; i < y.Size(); i++) {
+	adjointMatrix->Set(i,j, (i == j ? 1.0 : 0.) + gammaB * JacBj[i] + (i==2 ? 1.0 : 0.));	
+      }
+    }
+
+  adjointMatrix->Finalize();
+  //  adjointMatrix->PrintMatlab();
+  adjointSolver.SetOperator(*adjointMatrix);
+  
+  return 0;
+}
+
+// Is b = -fB ?
+// is tol reltol or abstol?
+int RobertsSUNDIALS::ImplicitSolveB(Vector &x, const Vector &b, double tol)
+{
+  adjointSolver.Mult(b, x);
+  x.Print();
+  return(0);
+}

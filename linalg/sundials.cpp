@@ -119,6 +119,21 @@ namespace mfem
     return(GetObj(A)->ODELinSys(t, mfem_y, mfem_fy, jok, jcur, gamma));
   }
 
+  // static int cvLinSysSetupB(realtype t, N_Vector y, N_Vector yB, N_Vector fyB,
+  //                            SUNMatrix AB, booleantype jokB, booleantype *jcurB,
+  //                            realtype gammaB, void *user_dataB, N_Vector tmp1B,
+  //                            N_Vector tmp2B, N_Vector tmp3B)
+  // {
+  //   // Get data from N_Vectors
+  //   const Vector mfem_y(y);
+  //   const Vector mfem_yB(yB);
+  //   const Vector mfem_fyB(fyB);
+
+  //   // Compute the linear system
+  //   return(GetObj(AB)->ODELinSysB(t, mfem_y, mfem_yB, mfem_fyB, jokB, jcurB, gammaB));
+  // }
+
+  
   static int arkLinSysSetup(realtype t, N_Vector y, N_Vector fy, SUNMatrix A,
                             SUNMatrix M, booleantype jok, booleantype *jcur,
                             realtype gamma, void *user_data, N_Vector tmp1,
@@ -454,6 +469,37 @@ namespace mfem
   // CVODES interface
   // ---------------------------------------------------------------------------
 
+  // Setup Newton problem M = (I-gamma J) is the linearized tangent of the rate equation
+  int CVODESSolver::LinSysSetupB(realtype t, N_Vector y, N_Vector yB, N_Vector fyB, SUNMatrix AB,
+				 booleantype jokB, booleantype *jcurB,
+				 realtype gammaB, void *user_data, N_Vector tmp1,
+				 N_Vector tmp2, N_Vector tmp3)
+  {
+    // Get data from N_Vectors
+    const Vector mfem_y(y);
+    const Vector mfem_yB(yB);
+    Vector mfem_fyB(fyB);
+    CVODESSolver *self = static_cast<CVODESSolver*>(GET_CONTENT(AB));
+    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);
+    
+    // Compute the linear system
+    return(f->ImplicitSetupB(t, mfem_y, mfem_yB, mfem_fyB, jokB, jcurB, gammaB));
+  }
+
+  int CVODESSolver::LinSysSolveB(SUNLinearSolver LS, SUNMatrix AB, N_Vector yB,
+                               N_Vector Rb, realtype tol)
+  {
+    Vector mfem_yB(yB);
+    const Vector mfem_Rb(Rb);
+    CVODESSolver *self = static_cast<CVODESSolver*>(GET_CONTENT(LS));
+    TimeDependentAdjointOperator * f = static_cast<TimeDependentAdjointOperator *>(self->f);
+    // Solve the linear system
+    int ret = f->ImplicitSolveB(mfem_yB, mfem_Rb, tol);
+    return(ret);
+  }
+
+  
+  
   void CVODESSolver::CreateB(double &tB, Vector &xB)
   {
     // Fill N_Vector wrapper with initial condition data
@@ -475,6 +521,13 @@ namespace mfem
     flag = CVodeSStolerancesB(sundials_mem, indexB, default_rel_tolB, default_abs_tolB);
     MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetSStolerancesB()");
 
+    // Set default linear solver (Newton is the default Nonlinear Solver)
+    LSB = SUNLinSol_SPGMR(yB, PREC_NONE, 0);
+    MFEM_VERIFY(LSB, "error in SUNLinSol_SPGMR()");
+
+    flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, NULL);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
+    
   }
   
   CVODESSolver::CVODESSolver(int lmm) :
@@ -550,27 +603,51 @@ namespace mfem
 
     CreateB(tB, xB);
     
-    // // Set default linear solver (Newton is the default Nonlinear Solver)
-    // LSB = SUNLinSol_SPGMR(yB, PREC_NONE, 0);
-    // MFEM_VERIFY(LSB, "error in SUNLinSol_SPGMR()");
-
-    // flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, NULL);
+    // /* Create dense SUNMatrix for use in linear solves */
+    // AB = SUNDenseMatrix(loc_size, loc_size);
+    // MFEM_VERIFY(AB, "error creating AB");
+    
+    // /* Create dense SUNLinearSolver object */
+    // LSB = SUNLinSol_Dense(yB, AB);
+    // MFEM_VERIFY(LSB, "error in SUNLinSol_Dense()");
+    
+    // /* Attach the matrix and linear solver */
+    // flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
     // MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
-
-    /* Create dense SUNMatrix for use in linear solves */
-    AB = SUNDenseMatrix(loc_size, loc_size);
-    MFEM_VERIFY(AB, "error creating AB");
-    
-    /* Create dense SUNLinearSolver object */
-    LSB = SUNLinSol_Dense(yB, AB);
-    MFEM_VERIFY(LSB, "error in SUNLinSol_Dense()");
-    
-    /* Attach the matrix and linear solver */
-    flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
-    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
 
   }
 
+  void CVODESSolver::SetLinearSolverB()
+  {
+    // Free any existing linear solver
+    if (LSB != NULL) { SUNLinSolFree(LSB); LSB = NULL; }
+
+    // Wrap linear solver as SUNLinearSolver and SUNMatrix
+    LSB = SUNLinSolNewEmpty();
+    MFEM_VERIFY(sundials_mem, "error in SUNLinSolNewEmpty()");
+
+    LSB->content         = this;
+    LSB->ops->gettype    = LSGetType;
+    LSB->ops->solve      = CVODESSolver::LinSysSolveB; // JW change
+    LSB->ops->free       = LSFree;
+
+    AB = SUNMatNewEmpty();
+    MFEM_VERIFY(sundials_mem, "error in SUNMatNewEmpty()");
+
+    AB->content      = this;
+    AB->ops->getid   = MatGetID;
+    AB->ops->destroy = MatDestroy;
+
+    // Attach the linear solver and matrix
+    flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
+
+    // Set the linear system evaluation function
+    flag = CVodeSetLinSysFnB(sundials_mem, indexB, CVODESSolver::LinSysSetupB); // JW change
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinSysFn()");
+  }
+
+  
   // void CVODESSolver::SetLinearSolverB(SundialsLinearSolver &ls_spec)
   // {
   //   // Free any existing linear solver
@@ -658,15 +735,7 @@ namespace mfem
 
   void CVODESSolver::Step(Vector &x, double &t, double &dt)
   {
-    if (!Parallel()) {
-      NV_DATA_S(y) = x.GetData();
-      MFEM_VERIFY(NV_LENGTH_S(y) == x.Size(), "");
-    } else {
-#ifdef MFEM_USE_MPI
-      NV_DATA_P(y) = x.GetData();
-      MFEM_VERIFY(NV_LOCLENGTH_P(y) == x.Size(), "");
-#endif
-    }
+    VerifyN_Vector(y, x);
     
     // Integrate the system
     double tout = t + dt;
@@ -681,15 +750,8 @@ namespace mfem
 
   void CVODESSolver::StepB(Vector &xB, double &tB, double &dtB)
   {
-    if (!Parallel()) {
-      NV_DATA_S(yB) = xB.GetData();
-      MFEM_VERIFY(NV_LENGTH_S(yB) == xB.Size(), "");
-    } else {
-#ifdef MFEM_USE_MPI
-      NV_DATA_P(yB) = xB.GetData();
-      MFEM_VERIFY(NV_LOCLENGTH_P(yB) == xB.Size(), "");
-#endif
-    }
+
+    VerifyN_Vector(yB, xB);
     
     // Integrate the system
     double tout = tB - dtB;

@@ -87,7 +87,23 @@ namespace mfem
       mfem_error("SundialsLinearSolver::ODELinSys() is not overridden!");
       return(-1);
     }
+    
+    /** Setup the ODE linear system A(y,t) = (I - gamma J) or A = (M - gamma J).
+        @param[in]  t     The time at which A(y,t) should be evaluated
+        @param[in]  y     The state at which A(y,t) should be evaluated
+        @param[in]  yB     The state at which A(yB,t) should be evaluated
+        @param[in]  fy    The current value of the ODE Rhs function, f(y,t)
+        @param[in]  jok   Flag indicating if the Jacobian should be updated
+        @param[out] jcur  Flag to signal if the Jacobian was updated
+        @param[in]  gamma The scaled time step value */   
+    virtual int ODELinSysB(double t, Vector y, Vector yB, Vector fyB, int jok, int *jcur,
+                          double gamma)
+    {
+      mfem_error("SundialsLinearSolver::ODELinSysB() is not overridden!");
+      return(-1);
+    }
 
+    
     /** Setup the ODE Mass matrix system M.
         @param[in] t The time at which M(t) should be evaluated */
     virtual int ODEMassSys(double t)
@@ -321,7 +337,19 @@ namespace mfem
     virtual void QuadratureIntegration(const Vector &y, Vector &qdot) const = 0;
     virtual void AdjointRateMult(const Vector &y, Vector & yB, Vector &yBdot) const = 0;
     virtual void ObjectiveSensitivityMult(const Vector &y, const Vector &yB, Vector &qBdot) const = 0;
+    virtual int ImplicitSetupB(const double t, const Vector &x, const Vector &xB, const Vector &fxB,
+			       int jokB, int *jcurB, double gammaB)
+    {
+      mfem_error("TimeDependentOperator::ImplicitSetupB() is not overridden!");
+      return(-1);
+    }
 
+    virtual int ImplicitSolveB(Vector &x, const Vector &b, double tol)
+    {
+      mfem_error("TimeDependentOperator::ImplicitSolveB() is not overridden!");
+      return(-1);
+    }
+    
   protected:
     
   };
@@ -429,6 +457,20 @@ namespace mfem
     
     // Set Linear Solver for the backward problem
     void SetLinearSolverB(SundialsLinearSolver &ls_spec);
+
+    void SetLinearSolverB();
+
+    
+    /// Setup the linear system A x = b
+    static int LinSysSetupB(realtype t, N_Vector y, N_Vector yB, N_Vector fyB, SUNMatrix A,
+			    booleantype jok, booleantype *jcur,
+			    realtype gamma, void *user_data, N_Vector tmp1,
+			    N_Vector tmp2, N_Vector tmp3);
+
+    /// Solve the linear system A x = b
+    static int LinSysSolveB(SUNLinearSolver LS, SUNMatrix A, N_Vector x,
+                           N_Vector b, realtype tol);
+
     
     /// Destroy the associated CVODE memory and SUNDIALS objects.
     virtual ~CVODESSolver() {};
