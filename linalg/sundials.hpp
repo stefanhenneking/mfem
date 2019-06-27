@@ -92,7 +92,7 @@ namespace mfem
         @param[in]  t     The time at which A(y,t) should be evaluated
         @param[in]  y     The state at which A(y,t) should be evaluated
         @param[in]  yB     The state at which A(yB,t) should be evaluated
-        @param[in]  fy    The current value of the ODE Rhs function, f(y,t)
+        @param[in]  fyB    The current value of the ODE Rhs function, f(y,t)
         @param[in]  jok   Flag indicating if the Jacobian should be updated
         @param[out] jcur  Flag to signal if the Jacobian was updated
         @param[in]  gamma The scaled time step value */   

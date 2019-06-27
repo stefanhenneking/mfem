@@ -368,10 +368,11 @@ int RobertsSUNDIALS::ImplicitSetupB(const double t, const Vector &y, const Vecto
       yBone[j] = 1.;
       AdjointRateMult(y, yBone, JacBj);
       for (int i = 0; i < y.Size(); i++) {
-	adjointMatrix->Set(i,j, (i == j ? 1.0 : 0.) + gammaB * JacBj[i] + (i==2 ? 1.0 : 0.));	
+	adjointMatrix->Set(i,j, (i == j ? 1.0 : 0.) - gammaB * JacBj[i] + (i==2 ? 1.0 : 0.));	
       }
     }
 
+  *jcurB = 1;
   adjointMatrix->Finalize();
   //  adjointMatrix->PrintMatlab();
   adjointSolver.SetOperator(*adjointMatrix);
@@ -383,6 +384,7 @@ int RobertsSUNDIALS::ImplicitSetupB(const double t, const Vector &y, const Vecto
 // is tol reltol or abstol?
 int RobertsSUNDIALS::ImplicitSolveB(Vector &x, const Vector &b, double tol)
 {
+  adjointSolver.SetRelTol(tol);
   adjointSolver.Mult(b, x);
   x.Print();
   return(0);
