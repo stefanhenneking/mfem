@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
       //in a transient problem with a fixed mesh, this is only needed once
       pmesh->Print(adios2output);
       //in a transient problem with a fixed mesh, we save in "steps"
-      x.Save(adios2output);
+      x.Save(adios2output, "sol");
 #endif
    }
 

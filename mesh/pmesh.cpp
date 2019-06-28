@@ -4044,9 +4044,6 @@ void ParMesh::Print(adios2stream &out) const
    // vertices
    adios2::Variable<uint32_t> varNumOfVertices =
       io.DefineVariable<uint32_t>("NumOfVertices", {adios2::LocalValueDim});
-   adios2::Variable<double> varVertices = io.DefineVariable<double>(
-   "vertices", {}, {},
-   {static_cast<size_t>(NumOfVertices), static_cast<size_t>(spaceDim)});
 
    const size_t nElementVertices =
       static_cast<size_t>(elements[0]->GetNVertices());
@@ -4114,21 +4111,34 @@ void ParMesh::Print(adios2stream &out) const
       // TODO save as arrays
    }
 
-   // use Span to save "vertices" and "connectivity"
-   // from non-contiguous  "vertices" and "elements" arrays
-   adios2::Variable<double>::Span spanVertices = engine.Put(varVertices);
-   adios2::Variable<uint64_t>::Span spanConnectivity =
-      engine.Put(varConnectivity);
-
-   // vertices
-   for (int v = 0; v < NumOfVertices; ++v)
+   if(Nodes == NULL)
    {
-      for (int coord = 0; coord < spaceDim; ++coord)
+   adios2::Variable<double> varVertices = io.DefineVariable<double>(
+      "vertices", {}, {},
+      {static_cast<size_t>(NumOfVertices), static_cast<size_t>(spaceDim)});
+
+   adios2::Variable<double>::Span spanVertices = engine.Put(varVertices);
+      // vertices
+      for (int v = 0; v < NumOfVertices; ++v)
       {
-         spanVertices[v * spaceDim + coord] = vertices[v](coord);
+         for (int coord = 0; coord < spaceDim; ++coord)
+         {
+            spanVertices[v * spaceDim + coord] = vertices[v](coord);
+         }
       }
    }
+   else
+   {
+	   Nodes->Save(out, "vertices");
+   }
+
+   // use Span to save "vertices" and "connectivity"
+   // from non-contiguous  "vertices" and "elements" arrays
+
+   adios2::Variable<uint64_t>::Span spanConnectivity =
+      engine.Put(varConnectivity);
    // connectivity
+
    size_t elementPosition = 0;
    for (int e = 0; e < NumOfElements; ++e)
    {

@@ -296,7 +296,9 @@ int main(int argc, char *argv[])
 
 #ifdef MFEM_USE_ADIOS2
       std::cout << "Using ADIOS2\n";
-      adios2stream adios2output("ex2p.bp",
+      std::string postfix = std::string(mesh_file);
+      postfix = postfix.substr(postfix.find_last_of("/")+1);
+      adios2stream adios2output("ex2p_" + postfix + ".bp",
                                 adios2stream::openmode::out, MPI_COMM_WORLD, "BPFile");
       // Commented out optional constructor for allowing adios2 runtime parameters (see below SetParameter)
       // adios2stream adios2output("refined.mesh.solution.bp", adios2stream::openmode::out, MPI_COMM_WORLD, "adios2_config.xml", "ex1p");
@@ -309,7 +311,7 @@ int main(int argc, char *argv[])
       //in a transient problem with a fixed mesh, this is only needed once
       pmesh->Print(adios2output);
       //in a transient problem with a fixed mesh, we save in "steps"
-      x.Save(adios2output);
+      x.Save(adios2output, "sol");
 #endif
 
    }
