@@ -270,14 +270,16 @@ int main(int argc, char *argv[])
 
    // backward portion
    Vector w(3);
+   w=0.;
    double TBout1 = 40.;
    Vector dG_dp(3);
+   dG_dp=0.;
    if (cvodes) {
      t = t_final;
      cvodes->InitB(adv, t, w);
      cvodes->InitQuadIntegrationB(1.e-6, 1.e-6);
      // Commenting this line back in fails
-     //     cvodes->SetLinearSolverB();
+     cvodes->SetLinearSolverB();
      
      // Results at time TBout1
      double dt_real = max(dt, t - TBout1);
@@ -358,7 +360,6 @@ int RobertsSUNDIALS::ImplicitSetupB(const double t, const Vector &y, const Vecto
   // J = dfB/dyB
   // fB
   // Let's create a SparseMatrix and fill in the entries since this example doesn't contain finite elements
-  cout << "t: " << t << " " << gammaB << endl;
   
   delete adjointMatrix;
   adjointMatrix = new SparseMatrix(y.Size(), yB.Size());
@@ -366,16 +367,19 @@ int RobertsSUNDIALS::ImplicitSetupB(const double t, const Vector &y, const Vecto
     {
       Vector JacBj(yB.Size());
       Vector yBone(yB.Size());
+      yBone = 0.;
       yBone[j] = 1.;
       AdjointRateMult(y, yBone, JacBj);
+      JacBj[2] += 1.;
       for (int i = 0; i < y.Size(); i++) {
-	adjointMatrix->Set(i,j, (i == j ? 1.0 : 0.) - gammaB * JacBj[i] + (i==2 ? 1.0 : 0.));	
+	adjointMatrix->Set(i,j, (i == j ? 1.0 : 0.) - gammaB * JacBj[i]);	
       }
     }
 
   *jcurB = 1;
   adjointMatrix->Finalize();
   //  adjointMatrix->PrintMatlab();
+  //  y.Print();
   adjointSolver.SetOperator(*adjointMatrix);
   
   return 0;
@@ -387,6 +391,5 @@ int RobertsSUNDIALS::ImplicitSolveB(Vector &x, const Vector &b, double tol)
 {
   adjointSolver.SetRelTol(tol);
   adjointSolver.Mult(b, x);
-  x.Print();
   return(0);
 }
