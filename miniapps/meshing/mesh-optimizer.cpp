@@ -223,10 +223,19 @@ public:
                double fyy = std::abs(std::sin(2*M_PI*X)*std::cos(2*M_PI*Y));
                
                 const double p = 2;
+                double weight = 0.0;
+                if (p < 3)
+                {
+                    weight = 1.5-0.25*p;
+                }
+                else{
+                    weight = 0.01;
+                }
+                
                 //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fxx));
                 //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fyy));
-                double size = 1.0/(1+std::exp(fxx-std::pow(p,2)+p+1));
-                double size2 = 1.0/(1+std::exp(fyy-std::pow(p,2)+p+1));
+                double size = 1.0/(1+fxx*weight); //(std::pow(p,p*(1-0.8*p))));
+                double size2 = 1.0/(1+fyy*weight); //(std::pow(p,p*(1-0.8*p))));
                 K(0, 0) = size;
                 K(0, 1) = 0.0;
                 K(1, 0) = 0.0;
@@ -243,9 +252,17 @@ public:
                 double fyy = std::abs(std::sin(Y*(M_PI*2)));
 
                 const double p = 2;
+                double weight = 0.0;
+                if (p < 3)
+                {
+                    weight = 1.5-0.25*p;
+                }
+                else{
+                    weight = 0.01;
+                }
                 
-                double size = 1.0/(1+std::exp(fxx-std::pow(p-1,2)));
-                double size2 = 1.0/(1+std::exp(fyy-std::pow(p-1,2)));
+                double size = 1.0/(1+fxx*weight);
+                double size2 = 1.0/(1+fyy*weight);
 
                 K(0, 0) = size;
                 K(0, 1) = 0.0;
@@ -258,17 +275,20 @@ public:
                 const double X = pos(0), Y = pos(1);
                 const double sec1 = 1.0/std::cosh(10*(X-0.45)), sec2 = 1.0/std::cosh(10*(X-0.55));
                 const double fx = 10*(sec1*sec1-sec2*sec2);
-                const double fxx = (((std::tanh(10*(X-0.45))*sec1*sec1-std::tanh(10*(X-0.55))*sec2*sec2)));
-                const double fy = -1.0;
-                const double curv = ((fxx)/std::pow((fx*fx)+1, 1.5));
+                const double fxx = std::abs(std::tanh(10*(X-0.45))*sec1*sec1-std::tanh(10*(X-0.55))*sec2*sec2);
                 
-                const double p = 3;
+                const double p = 2;
+                double weight = 0.0;
+                if (p < 3)
+                {
+                    weight = 1.5-0.25*p;
+                }
+                else{
+                    weight = 0.01;
+                }
                 
-                double size = 1.0/(1+std::exp(fxx-std::pow(p,2)+p+1));
-                
-                
-                //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fxx));
-                //double size2 = 1.0/(1+std::exp(fyy-6+1));
+                double size = 1.0/(1+fxx*weight); 
+
 
                 K(0, 0) = size;
                 K(0, 1) = 0.0;
