@@ -175,7 +175,7 @@ namespace mfem
       }
     }
 
-    void VerifyN_Vector(N_Vector &y, Vector x)
+    void VerifyN_Vector(N_Vector &y, Vector &x)
     {
       if (!Parallel()) {
 	NV_DATA_S(y) = x.GetData();

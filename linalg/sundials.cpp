@@ -119,21 +119,6 @@ namespace mfem
     return(GetObj(A)->ODELinSys(t, mfem_y, mfem_fy, jok, jcur, gamma));
   }
 
-  // static int cvLinSysSetupB(realtype t, N_Vector y, N_Vector yB, N_Vector fyB,
-  //                            SUNMatrix AB, booleantype jokB, booleantype *jcurB,
-  //                            realtype gammaB, void *user_dataB, N_Vector tmp1B,
-  //                            N_Vector tmp2B, N_Vector tmp3B)
-  // {
-  //   // Get data from N_Vectors
-  //   const Vector mfem_y(y);
-  //   const Vector mfem_yB(yB);
-  //   const Vector mfem_fyB(fyB);
-
-  //   // Compute the linear system
-  //   return(GetObj(AB)->ODELinSysB(t, mfem_y, mfem_yB, mfem_fyB, jokB, jcurB, gammaB));
-  // }
-
-  
   static int arkLinSysSetup(realtype t, N_Vector y, N_Vector fy, SUNMatrix A,
                             SUNMatrix M, booleantype jok, booleantype *jcur,
                             realtype gamma, void *user_data, N_Vector tmp1,
@@ -521,13 +506,6 @@ namespace mfem
     flag = CVodeSStolerancesB(sundials_mem, indexB, default_rel_tolB, default_abs_tolB);
     MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetSStolerancesB()");
 
-    // Set default linear solver (Newton is the default Nonlinear Solver)
-    LSB = SUNLinSol_SPGMR(yB, PREC_NONE, 0);
-    MFEM_VERIFY(LSB, "error in SUNLinSol_SPGMR()");
-
-    flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, NULL);
-    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
-    
   }
   
   CVODESSolver::CVODESSolver(int lmm) :
@@ -603,17 +581,24 @@ namespace mfem
 
     CreateB(tB, xB);
     
-    // /* Create dense SUNMatrix for use in linear solves */
-    // AB = SUNDenseMatrix(loc_size, loc_size);
-    // MFEM_VERIFY(AB, "error creating AB");
-    
-    // /* Create dense SUNLinearSolver object */
-    // LSB = SUNLinSol_Dense(yB, AB);
-    // MFEM_VERIFY(LSB, "error in SUNLinSol_Dense()");
-    
-    // /* Attach the matrix and linear solver */
-    // flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
+    // // Set default linear solver (Newton is the default Nonlinear Solver)
+    // LSB = SUNLinSol_SPGMR(yB, PREC_NONE, 0);
+    // MFEM_VERIFY(LSB, "error in SUNLinSol_SPGMR()");
+
+    // flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, NULL);
     // MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
+
+    /* Create dense SUNMatrix for use in linear solves */
+    AB = SUNDenseMatrix(loc_size, loc_size);
+    MFEM_VERIFY(AB, "error creating AB");
+    
+    /* Create dense SUNLinearSolver object */
+    LSB = SUNLinSol_Dense(yB, AB);
+    MFEM_VERIFY(LSB, "error in SUNLinSol_Dense()");
+    
+    /* Attach the matrix and linear solver */
+    flag = CVodeSetLinearSolverB(sundials_mem, indexB, LSB, AB);
+    MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinearSolverB()");
 
   }
 
@@ -647,7 +632,6 @@ namespace mfem
     MFEM_VERIFY(flag == CV_SUCCESS, "error in CVodeSetLinSysFn()");
   }
 
-  
   // void CVODESSolver::SetLinearSolverB(SundialsLinearSolver &ls_spec)
   // {
   //   // Free any existing linear solver
