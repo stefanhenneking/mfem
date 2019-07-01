@@ -65,9 +65,15 @@ double weight_fun(const Vector &x);
 
 double ind_values(const Vector &x)
 {
-   const int opt = -2;
+   const int opt = -3;
    const double small = 0.001, big = 0.01;
 
+
+   if (opt == -3)
+   {
+     const double X = x(0), Y = x(1);
+     return std::sin(16*(std::pow(X-0.5,2)+std::pow(Y-0.5,2)));
+   }
 
    if (opt == -2)
    {
@@ -213,6 +219,37 @@ public:
       T.Transform(ip, pos);
       switch(type)
       {
+
+        case -3:
+         {
+               const double X = pos(0), Y = pos(1);
+               
+               double fxx = std::abs(32*std::cos(16*(std::pow(X-0.5,2)+std::pow(Y-0.5,2)))-
+                                     1024*std::pow(X-0.5,2)*std::sin(16*(std::pow(X-0.5,2)+std::pow(Y-0.5,2))))/220.0;
+
+               double fyy = std::abs(32*std::cos(16*(std::pow(X-0.5,2)+std::pow(Y-0.5,2)))-
+                                     1024*std::pow(Y-0.5,2)*std::sin(16*(std::pow(X-0.5,2)+std::pow(Y-0.5,2))))/220.0;
+               
+                const double p = 2;
+                double weight = 0.0;
+                if (p < 3)
+                {
+                    weight = 1.5-0.25*p;
+                }
+                else{
+                    weight = 0.01;
+                }
+                
+                //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fxx));
+                //1.0/(1.0+std::pow(std::exp(1)/(p-((p-1)/p)),fyy));
+                double size = 1.0/(1+fxx*weight); //(std::pow(p,p*(1-0.8*p))));
+                double size2 = 1.0/(1+fyy*weight); //(std::pow(p,p*(1-0.8*p))));
+                K(0, 0) = size;
+                K(0, 1) = 0.0;
+                K(1, 0) = 0.0;
+                K(1, 1) = size2;
+                break;
+         }
          case -2:
          {
                const double X = pos(0), Y = pos(1);
@@ -579,7 +616,7 @@ int main (int argc, char *argv[])
                  << "keys jRmclA" << endl;
          }
 
-         adapt_coeff = new HessianCoefficient(dim, -2);
+         adapt_coeff = new HessianCoefficient(dim, -3);
          tc->SetAnalyticTargetSpec(NULL, NULL, adapt_coeff);
          target_c = tc;
          break;
