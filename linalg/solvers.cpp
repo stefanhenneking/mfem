@@ -1767,7 +1767,6 @@ void GMGSolver::Mult(const Vector &r, Vector &z) const
 
 GMGSolver::~GMGSolver() {
    int n = S.size();
-   // delete invAc;
    for (int i = n - 1; i >= 0 ; i--)
    {
       delete S[i];
