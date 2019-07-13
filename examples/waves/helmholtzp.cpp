@@ -260,9 +260,6 @@ int main(int argc, char *argv[])
    precGMG->SetDiagonalBlock(1, gmgIm);
 
 
-
-
-
    fespace->GetRestrictionMatrix()->Mult(x.GetBlock(0), trueX.GetBlock(0));
    fespace->GetProlongationMatrix()->MultTranspose(rhs.GetBlock(0),trueRhs.GetBlock(0));
 
@@ -283,6 +280,7 @@ int main(int argc, char *argv[])
    gmres.SetRelTol(rtol);
    gmres.SetMaxIter(maxit);
    gmres.SetOperator(*HelmholtzOp);
+   // gmres.SetOperator(*cSysMat);
    gmres.SetPreconditioner(*precGMG);
    gmres.SetPrintLevel(1);
    gmres.Mult(trueRhs, trueX);
@@ -299,6 +297,20 @@ int main(int argc, char *argv[])
    {
       cout << "GMRES with exact Inv finished" << endl;
    }
+
+   // Direct solve
+   ComplexHypreParMatrix chpm(A_rr, A_ir, false, false);
+   HypreParMatrix *CA = chpm.GetSystemMatrix();
+   PetscLinearSolver * invCA = new PetscLinearSolver(MPI_COMM_WORLD, "direct");
+   invCA->SetOperator(PetscParMatrix(CA, Operator::PETSC_MATAIJ));
+   trueX = 0.0;
+   invCA->Mult(trueRhs,trueX);
+
+   if (myid == 0)
+   {
+      cout << "Direct solver finished" << endl;
+   }
+
 
    ParGridFunction *x_Re(new ParGridFunction);
    ParGridFunction *x_Im(new ParGridFunction);

@@ -142,7 +142,10 @@ public:
       PETSC_MATSHELL,   ///< ID for class PetscParMatrix, MATSHELL format.
       PETSC_MATNEST,    ///< ID for class PetscParMatrix, MATNEST format.
       PETSC_MATHYPRE,   ///< ID for class PetscParMatrix, MATHYPRE format.
-      PETSC_MATGENERIC  ///< ID for class PetscParMatrix, unspecified format.
+      PETSC_MATGENERIC,  ///< ID for class PetscParMatrix, unspecified format.
+      Complex_Operator, ///< ID for class ComplexOperator.
+      MFEM_ComplexSparseMat, ///< ID for class ComplexSparseMatrix.
+      Complex_Hypre_ParCSR   ///< ID for class ComplexHypreParMatrix.
    };
 
    /// Return the type ID of the Operator class.
