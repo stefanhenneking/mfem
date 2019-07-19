@@ -315,6 +315,23 @@ public:
    virtual void MultTranspose(const Vector &x, Vector &y) const { y = x; }
 };
 
+/// Scaled Operator B: x -> a A(x).
+class ScaledOperator : public Operator
+{
+private:
+   const Operator &A_;
+   double a_;
+
+public:
+   /// Create a scalar product operator related to A.
+   explicit ScaledOperator(const Operator *A, double a)
+      : Operator(A->Width(), A->Height()), A_(*A), a_(a) { }
+
+   /// Operator application
+   virtual void Mult(const Vector &x, Vector &y) const
+   { A_.Mult(x, y); y *= a_; }
+};
+
 
 /** @brief The transpose of a given operator. Switches the roles of the methods
     Mult() and MultTranspose(). */

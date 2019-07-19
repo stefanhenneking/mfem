@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
       cout << "Construction of MG precond time: " << chrono.RealTime() << endl;
    }
 
-   int maxit(5000);
+   int maxit(1000);
    double rtol(1.e-6);
    double atol(0.0);
 
