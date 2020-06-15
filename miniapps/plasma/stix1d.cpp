@@ -9,13 +9,13 @@
 // terms of the GNU Lesser General Public License (as published by the Free
 // Software Foundation) version 2.1 dated February 1999.
 //
-//   -----------------------------------------------------------------------
-//   Hertz Miniapp:  Simple Frequency-Domain Electromagnetic Simulation Code
-//   -----------------------------------------------------------------------
+//   ------------------------------------------------------------------------
+//        Stix1D Miniapp: Cold Plasma Electromagnetic Simulation Code
+//   ------------------------------------------------------------------------
 //
 //   Assumes that all sources and boundary conditions oscillate with the same
-//   frequency although not necessarily in phase with one another.  This
-//   assumptions implies that we can factor out the time dependence which we
+//   frequency although not necessarily in phase with one another. This
+//   assumption implies that we can factor out the time dependence which we
 //   take to be of the form exp(i omega t).  With these assumptions we can
 //   write the Maxwell equations in the form:
 //
@@ -48,42 +48,20 @@
 //               - i omega sqrt{epsilon/mu} (W, E)_{\Gamma}
 //
 //
-// Compile with: make hertz
+// Compile with: make stix1d
 //
-// Sample runs:
+// Sample runs (-s 5 requires STRUMPACK (see solver options below)):
 //
 //   By default the sources and fields are all zero
-//     mpirun -np 4 hertz
+//     mpirun -np 4 stix1d
 //
-// ./stix1d -md 0.24 -ne 50 -dbcs '3 5' -s 5 -f 80e6 -B '5.4 0 0' -w R -num '2e20 2e20'
+//   ./stix1d -md 0.24 -ne 50 -dbcs '3 5' -s 5 -f 80e6 -B '5.4 0 0' -w R -num '2e20 2e20'
 //
-// ./stix1d -md 0.24 -ne 50 -dbcs '3 5' -s 5 -f 80e6 -B '5.4 0 0' -w L -num '2e20 2e20'
+//   ./stix1d -md 0.24 -ne 50 -dbcs '3 5' -s 5 -f 80e6 -B '5.4 0 0' -w L -num '2e20 2e20'
 //
-// ./stix1d -md 0.007 -ne 50 -dbcs '3 5' -s 5 -f 80e6 -B '0 5.4 0' -w O -num '2e20 2e20'
+//   ./stix1d -md 0.007 -ne 50 -dbcs '3 5' -s 5 -f 80e6 -B '0 5.4 0' -w O -num '2e20 2e20'
 //
-// ./stix1d -md 0.24 -ne 480 -dbcs '3 5' -s 5 -f 80e6 -maxit 1 -B '0 0 5.4' -w J -slab '0 1 0 0.16 0.02' -num '2e20 2e20'
-//
-//   Current source in a sphere with absorbing boundary conditions
-//     mpirun -np 4 hertz -m ../../data/ball-nurbs.mesh -rs 2
-//                        -abcs '-1' -f 3e8
-//                        -do '-0.3 0.0 0.0 0.3 0.0 0.0 0.1 1 .5 .5'
-//
-//   Current source in a metal sphere with dielectric and conducting materials
-//     mpirun -np 4 hertz -m ../../data/ball-nurbs.mesh -rs 2
-//                        -dbcs '-1' -f 3e8
-//                        -do '-0.3 0.0 0.0 0.3 0.0 0.0 0.1 1 .5 .5'
-//                        -cs '0.0 0.0 -0.5 .2 10'
-//                        -ds '0.0 0.0 0.5 .2 10'
-//
-//   Current source in a metal box
-//     mpirun -np 4 hertz -m ../../data/fichera.mesh -rs 3
-//                        -dbcs '-1' -f 3e8
-//                        -do '-0.5 -0.5 0.0 -0.5 -0.5 1.0 0.1 1 .5 1'
-//
-//   Current source with a mixture of absorbing and reflecting boundaries
-//     mpirun -np 4 hertz -m ../../data/fichera.mesh -rs 3
-//                        -do '-0.5 -0.5 0.0 -0.5 -0.5 1.0 0.1 1 .5 1'
-//                        -dbcs '4 8 19 21' -abcs '5 18' -f 3e8
+//   ./stix1d -md 0.24 -ne 480 -dbcs '3 5' -s 5 -f 80e6 -maxit 1 -B '0 0 5.4' -w J -slab '0 1 0 0.16 0.02' -num '2e20 2e20'
 //
 
 #include "cold_plasma_dielectric_coefs.hpp"
